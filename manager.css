@@ -252,13 +252,18 @@ body[data-mode="panel"] header h1 { margin: 0; }
 .minimize { display: none; }
 body[data-mode="panel"] .minimize {
   display: block;
-  position: fixed;
-  top: 4px;
-  right: 4px;
-  z-index: 1100; /* above the header, which spans the full width and would otherwise cover it */
-  padding: 2px 8px;
+  position: absolute;     /* relative to the active group window (position: relative) */
+  top: -14px;
+  right: -10px;
+  z-index: 1100;          /* above the header, which spans the full width */
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 1px solid #333;
+  border-radius: 50%;
   background: #fff;
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
 }
 

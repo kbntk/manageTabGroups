@@ -10,6 +10,9 @@ if (MODE === "panel") {
   document.documentElement.style.background = "transparent";
 }
 
+// The panel's close button. In panel mode it is moved onto the active group window (top right corner).
+const closeButton = document.getElementById("minimize");
+
 const COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
 const TAB_GROUP_ID_NONE = -1; // browser.tabGroups.TAB_GROUP_ID_NONE
 
@@ -74,6 +77,10 @@ function render(data) {
   renderStrip(data);
 
   if (MODE === "panel") {
+    // Close button sits on the active group's top right corner (or at the body if no group)
+    const host = container.querySelector(".group.selected") || document.body;
+    host.appendChild(closeButton);
+
     postPanelBounds();
     // Tell the strip which group is active in the panel
     sendToEmbedder({ type: "mtg-active", groupId: selectedGroupId });
