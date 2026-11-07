@@ -6,6 +6,7 @@ const COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cya
 const TAB_GROUP_ID_NONE = -1; // browser.tabGroups.TAB_GROUP_ID_NONE
 
 let selectedGroupId = null;
+let scrollToSelected = false; // set when a group is picked from the nav, so it gets scrolled into view
 let draggedTab = null; // { id, index, groupId } while a tab row is being dragged
 
 async function loadData() {
@@ -31,6 +32,22 @@ function render(data) {
     const groupTabs = tabs.filter(t => t.groupId === group.id);
     container.appendChild(renderGroup(group, groupTabs, data));
   }
+
+  if (scrollToSelected) {
+    scrollToSelected = false;
+    container.querySelector(".group.selected")?.scrollIntoView({
+      behavior: "smooth",
+      inline: "center",
+      block: "nearest"
+    });
+  }
+}
+
+// Make a group the active one; optionally scroll it into view (used by the nav)
+function selectGroup(groupId, { scroll = false } = {}) {
+  selectedGroupId = groupId;
+  scrollToSelected = scroll;
+  refresh();
 }
 
 function renderNav(groups) {
@@ -40,10 +57,7 @@ function renderNav(groups) {
     const btn = document.createElement("button");
     btn.textContent = group.title || `Group ${group.id}`;
     btn.classList.toggle("active", group.id === selectedGroupId);
-    btn.addEventListener("click", () => {
-      selectedGroupId = group.id;
-      refresh();
-    });
+    btn.addEventListener("click", () => selectGroup(group.id, { scroll: true }));
     nav.appendChild(btn);
   }
 }
@@ -58,8 +72,7 @@ function renderGroup(group, groupTabs, data) {
   el.addEventListener("click", (event) => {
     if (event.target.closest("button, select, input")) return;
     if (selectedGroupId === group.id) return;
-    selectedGroupId = group.id;
-    refresh();
+    selectGroup(group.id);
   });
 
   // Header: title (click to rename) + "..." menu
