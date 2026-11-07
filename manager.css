@@ -187,7 +187,7 @@ body { padding-bottom: 96px; }
   bottom: 0;
   height: 80px;
   display: flex;
-  align-items: flex-end;
+  align-items: stretch; /* every item, single tab or group, has the full strip height */
   gap: 6px;
   padding: 10px 24px;
   overflow-x: auto;
@@ -198,7 +198,6 @@ body { padding-bottom: 96px; }
 #strip .mini-tab {
   flex-shrink: 0;
   width: 24px;
-  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
