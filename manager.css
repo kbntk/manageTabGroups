@@ -177,6 +177,69 @@ select.color { font-size: 12px; }
 
 .group li.drop-after { box-shadow: inset 0 -2px 0 #111; }
 
+/* Bottom strip: all tabs of the window in order, miniaturized */
+body { padding-bottom: 96px; }
+
+#strip {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 80px;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 10px 24px;
+  overflow-x: auto;
+  background: #fafafa;
+  border-top: 1px solid #ccc;
+}
+
+#strip .mini-tab {
+  flex-shrink: 0;
+  width: 24px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #bbb;
+  border-radius: 2px;
+}
+
+#strip .mini-favicon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+#strip .mini-group {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  border: 2px solid #333;
+  border-radius: 3px;
+  background: #fff;
+  cursor: grab;
+}
+
+#strip .mini-group.dragging { opacity: 0.4; }
+
+#strip .mini-group-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+#strip .mini-group-tabs { display: flex; gap: 2px; }
+
+#strip .drop-before { box-shadow: inset 3px 0 0 #111; }
+
+#strip .drop-after { box-shadow: inset -3px 0 0 #111; }
+
 .picker-list li span.title {
   overflow: hidden;
   text-overflow: ellipsis;
