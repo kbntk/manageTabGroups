@@ -27,7 +27,7 @@ h1 { margin: 0 0 8px; font-size: 20px; font-weight: normal; }
 #groups {
   display: flex;
   gap: 24px;
-  align-items: flex-start;
+  align-items: center; /* all groups centered on the row, i.e. on the tallest one (the active group) */
   padding: 24px;
   overflow-x: auto;
 }
@@ -41,7 +41,31 @@ h1 { margin: 0 0 8px; font-size: 20px; font-weight: normal; }
   border-top-width: 6px;
 }
 
-.group.selected { width: 480px; } /* twice the width of a regular group (240px) */
+/* Selected group plus its "<" / ">" buttons, vertically centered on the group */
+.group-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.switch-button {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #333;
+  background: #fff;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.switch-button:hover { background: #eee; }
+
+.group.selected {
+  width: 960px;      /* twice the previous active width (480px) */
+  min-height: 520px; /* twice the regular group height (260px) */
+}
 
 .group h2 {
   font-size: 15px;

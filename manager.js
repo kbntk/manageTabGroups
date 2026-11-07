@@ -29,10 +29,27 @@ function render(data) {
   const container = document.getElementById("groups");
   container.textContent = "";
 
-  for (const group of groups) {
+  groups.forEach((group, index) => {
     const groupTabs = tabs.filter(t => t.groupId === group.id);
-    container.appendChild(renderGroup(group, groupTabs, data));
-  }
+    const groupEl = renderGroup(group, groupTabs, data);
+
+    if (group.id !== selectedGroupId) {
+      container.appendChild(groupEl);
+      return;
+    }
+
+    // Selected group: wrap it with "<" / ">" so the buttons center on the group's height
+    const wrap = document.createElement("div");
+    wrap.className = "group-wrap";
+    if (index > 0) {
+      wrap.appendChild(createSwitchButton("<", groups[index - 1].id, "Previous group"));
+    }
+    wrap.appendChild(groupEl);
+    if (index < groups.length - 1) {
+      wrap.appendChild(createSwitchButton(">", groups[index + 1].id, "Next group"));
+    }
+    container.appendChild(wrap);
+  });
 
   renderStrip(data);
 
@@ -44,6 +61,16 @@ function render(data) {
       block: "nearest"
     });
   }
+}
+
+// "<" / ">" button beside the selected group: switches to a neighbouring group
+function createSwitchButton(label, targetGroupId, title) {
+  const button = document.createElement("button");
+  button.className = "switch-button";
+  button.textContent = label;
+  button.title = title;
+  button.addEventListener("click", () => selectGroup(targetGroupId, { scroll: true }));
+  return button;
 }
 
 // Make a group the active one; optionally scroll it into view (used by the nav)
