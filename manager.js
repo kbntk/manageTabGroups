@@ -580,10 +580,8 @@ function renderStrip(data) {
 
 function renderMiniTab(item) {
   const el = createMiniTab(item.tab);
-  el.addEventListener("click", () => {
-    if (MODE === "strip") sendToEmbedder({ type: "mtg-open", groupId: null });
-  });
-  el.addEventListener("dblclick", () => goToTab(item.tab));
+  // A single click opens the tab. Dragging (press and move) does not fire a click.
+  el.addEventListener("click", () => goToTab(item.tab));
 
   // Press and drag an ungrouped tab to move it along the strip
   el.draggable = true;

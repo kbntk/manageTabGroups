@@ -47,7 +47,13 @@
   });
   strip.src = browser.runtime.getURL("manager.html?mode=strip");
   strip.addEventListener("mouseenter", () => { state.hoverStrip = true; layout(); });
-  strip.addEventListener("mouseleave", () => { state.hoverStrip = false; layout(); });
+  strip.addEventListener("mouseleave", () => {
+    // While a tab is dragged, the pointer can leave the strip without the user leaving it:
+    // keep the strip expanded so it does not shrink mid-drag
+    if (dragging) return;
+    state.hoverStrip = false;
+    layout();
+  });
   strip.addEventListener("load", () => { postCompact(); postActive(); });
 
   // Group that is active in the open panel; the strip highlights it
