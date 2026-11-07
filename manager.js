@@ -206,6 +206,15 @@ function renderGroup(group, groupTabs, data) {
     });
 
     tabMenuWrap.append(tabMenuButton, tabMenu);
+    // Double-click a tab row of the active group to switch to that tab
+    if (group.id === selectedGroupId) {
+      li.addEventListener("dblclick", (event) => {
+        if (event.target.closest("button")) return;
+        event.preventDefault(); // no text selection from the double-click
+        goToTab(tab);
+      });
+    }
+
     // Drag a tab row to reorder tabs inside the group
     li.draggable = true;
     li.addEventListener("dragstart", (event) => {
@@ -315,6 +324,53 @@ async function restoreGroupMembership(groupId, tabIds, { title, color } = {}) {
     await browser.tabGroups.update(newGroupId, props);
   }
   return newGroupId;
+}
+
+// Return a navigable URL for the text, or null if it is not a URL.
+// Accepts full http(s) URLs and bare domains such as "example.com/path".
+function toUrl(text) {
+  const value = text.trim();
+  try {
+    const url = new URL(value);
+    if (url.protocol === "http:" || url.protocol === "https:") return url.href;
+  } catch {
+    // not an absolute URL, try a bare domain below
+  }
+  if (!/\s/.test(value) && value.includes(".")) {
+    try {
+      const url = new URL("https://" + value);
+      if (url.hostname.includes(".")) return url.href;
+    } catch {
+      // not a domain either
+    }
+  }
+  return null;
+}
+
+// Open a new tab in the group: the URL if the text is one, otherwise a search
+// with the default search engine. The new tab is added to the group.
+async function addNewTabToGroup(group, text) {
+  const url = toUrl(text);
+  if (url) {
+    const tab = await browser.tabs.create({ url, windowId: group.windowId, active: true });
+    await browser.tabs.group({ tabIds: [tab.id], groupId: group.id });
+    return;
+  }
+
+  // Search opens the tab itself, so find the tab that appeared and group it
+  const before = new Set((await browser.tabs.query({ windowId: group.windowId })).map(t => t.id));
+  await browser.search.search({ query: text, disposition: "NEW_TAB" });
+  const created = (await browser.tabs.query({ windowId: group.windowId }))
+    .filter(t => !before.has(t.id));
+  if (created.length > 0) {
+    await browser.tabs.group({ tabIds: created.map(t => t.id), groupId: group.id });
+  }
+}
+
+// Switch the browser to a specific tab (and its window)
+async function goToTab(tab) {
+  await browser.windows.update(tab.windowId, { focused: true });
+  await browser.tabs.update(tab.id, { active: true });
 }
 
 // Jump to the group's first tab in the browser
@@ -632,7 +688,28 @@ async function openTabPicker(group) {
   closeButton.textContent = "Close";
   closeButton.addEventListener("click", closeDialogs);
 
-  dialog.append(heading, filter, list, closeButton);
+  // Open a new tab (URL, or a web search if the text is not a URL) in this group
+  const newTabForm = document.createElement("form");
+  newTabForm.className = "new-tab-form";
+
+  const urlInput = document.createElement("input");
+  urlInput.type = "text";
+  urlInput.placeholder = "URL or search terms";
+
+  const openButton = document.createElement("button");
+  openButton.type = "submit";
+  openButton.textContent = "Open";
+
+  newTabForm.append(urlInput, openButton);
+  newTabForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!urlInput.value.trim()) return;
+    await addNewTabToGroup(group, urlInput.value);
+    closeDialogs();
+    refresh();
+  });
+
+  dialog.append(heading, newTabForm, filter, list, closeButton);
   overlay.appendChild(dialog);
   document.body.appendChild(overlay);
 

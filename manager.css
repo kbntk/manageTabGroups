@@ -106,7 +106,27 @@ button.round {
   line-height: 1;
 }
 
-.add { position: absolute; right: 12px; bottom: 12px; }
+/* Group "+" button: twice the default size of .round (28px) */
+button.round.add {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 56px;
+  height: 56px;
+  font-size: 32px;
+}
+
+.new-tab-form { display: flex; gap: 8px; }
+
+.new-tab-form input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 14px;
+  border: 1px solid #999;
+}
+
+.new-tab-form button { padding: 4px 12px; cursor: pointer; }
 
 .tab-menu { position: relative; flex-shrink: 0; }
 
