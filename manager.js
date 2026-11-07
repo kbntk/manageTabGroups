@@ -421,6 +421,50 @@ async function addNewTabToGroup(group, text) {
   }
 }
 
+// Right-click menu for a group block in the strip
+function showGroupMenu(x, y, item) {
+  closeGroupMenu();
+
+  const menu = document.createElement("div");
+  menu.id = "group-context-menu";
+  menu.className = "context-menu";
+  // In the strip iframe (short) the menu is shown at the top of the strip
+  menu.style.left = `${Math.min(x, window.innerWidth - 200)}px`;
+  menu.style.top = MODE === "strip" ? "4px" : `${y}px`;
+
+  const endItem = document.createElement("button");
+  endItem.type = "button";
+  endItem.textContent = "Move group to the end";
+  endItem.addEventListener("click", async () => {
+    closeGroupMenu();
+    await moveGroupToEnd(item);
+    refresh();
+  });
+
+  menu.appendChild(endItem);
+  document.body.appendChild(menu);
+}
+
+function closeGroupMenu() {
+  document.getElementById("group-context-menu")?.remove();
+}
+
+document.addEventListener("click", closeGroupMenu);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeGroupMenu();
+});
+
+// Moves all tabs of a group to the end of the window, keeping their order
+async function moveGroupToEnd(item) {
+  const tabIds = item.tabs.map(t => t.id);
+  const all = await api.tabs.query({ windowId: item.tabs[0].windowId });
+  const newStart = all.length - tabIds.length;
+  if (newStart === item.first) return;
+
+  await moveTabBlock(tabIds, item.first, newStart);
+  await restoreGroupMembership(item.group.id, tabIds, { title: item.group.title, color: item.group.color });
+}
+
 // Switch the browser to a specific tab (and its window)
 async function goToTab(tab) {
   await api.windows.update(tab.windowId, { focused: true });
@@ -608,6 +652,10 @@ function renderMiniGroup(item) {
   el.append(label, tabsRow);
 
   el.addEventListener("dblclick", () => goToGroup(item.tabs));
+  el.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    showGroupMenu(event.clientX, event.clientY, item);
+  });
 
   el.addEventListener("click", () => {
     if (MODE === "strip") {

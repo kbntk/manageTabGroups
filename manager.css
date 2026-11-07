@@ -308,6 +308,29 @@ body[data-mode="strip"].compact #strip .mini-group { padding: 2px; border-width:
 
 .strip-nav:hover { background: #eee; }
 
+/* Right-click menu for a group block in the strip */
+.context-menu {
+  position: fixed;
+  z-index: 10;
+  background: #fff;
+  border: 1px solid #333;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.context-menu button:hover { background: #eee; }
+
 /* Selection actions bar, shown while tabs are checked */
 #selection-bar {
   display: flex;
