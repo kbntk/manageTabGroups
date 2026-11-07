@@ -5,6 +5,9 @@
 (() => {
   const EXT_ORIGIN = new URL(browser.runtime.getURL("")).origin;
   const STRIP_HEIGHT = 80;   // px, expanded strip
+  // Highest z-index a page can use. Sites such as bbc.com have sticky menus with z-index
+  // above 1000, which covered the panel's title; the panel must stay on top of them.
+  const TOP_Z_INDEX = "2147483647";
   const STRIP_COLLAPSED = 8; // px, minimized state without hover
   const STRIP_COMPACT = 26;  // px, strip with icons only, after a click outside the panel
   const BAR_COLLAPSED = 8;   // px, minimized bar without hover
@@ -13,7 +16,7 @@
   const state = {
     open: false,      // panel visible
     minimized: false, // panel minimized to the bar
-    compact: false,   // panel closed by a click outside it: strip shows icons only
+    compact: true,    // strip shows icons only (default; cleared when the panel opens)
     hoverStrip: false,
     hoverBar: false,
   };
@@ -71,7 +74,7 @@
     color: "#fff",
     background: "#111",
     cursor: "pointer",
-    zIndex: "1000",
+    zIndex: TOP_Z_INDEX,
     display: "none",
   });
   bar.addEventListener("mouseenter", () => { state.hoverBar = true; layout(); });
@@ -88,7 +91,7 @@
       height: "0px", // set to the height of the groups area by the panel ("mtg-bounds")
       border: "0",
       background: "transparent",
-      zIndex: "1000",
+      zIndex: TOP_Z_INDEX,
       display: "none",
     });
     frame.src = browser.runtime.getURL("manager.html?mode=panel");

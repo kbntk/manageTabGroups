@@ -12,8 +12,19 @@
     <h1>Tab groups</h1>
     <nav id="group-nav"></nav>
   </header>
+  <div id="selection-bar" hidden>
+    <span id="selection-count"></span>
+    <button type="button" data-action="copy-to-group">Copy to another group</button>
+    <button type="button" data-action="move-to-group">Move to another group</button>
+    <button type="button" data-action="copy-to-new">Copy to a new group</button>
+    <button type="button" data-action="move-to-new">Move to a new group</button>
+  </div>
   <main id="groups"></main>
-  <section id="strip" aria-label="All tabs in window order"></section>
+  <div id="strip-bar">
+    <button id="strip-first" class="strip-nav" type="button" title="First tab">&lt;</button>
+    <section id="strip" aria-label="All tabs in window order"></section>
+    <button id="strip-last" class="strip-nav" type="button" title="Last tab">&gt;</button>
+  </div>
   <script src="manager.js"></script>
 </body>
 </html>

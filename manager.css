@@ -230,7 +230,7 @@ body[data-mode="page"] { padding-bottom: 96px; }
 /* Panel mode: the overlay on a web page. Transparent except for the group windows and
    the "<" / ">" buttons. No header and no strip (the strip is shown separately). */
 body[data-mode="panel"] { padding-bottom: 0; background: transparent; }
-body[data-mode="panel"] #strip,
+body[data-mode="panel"] #strip-bar,
 body[data-mode="panel"] #group-nav { display: none; }
 
 /* Panel title: shown above the groups, on top of them */
@@ -260,7 +260,7 @@ body[data-mode="panel"] .minimize {
 body[data-mode="strip"] { margin: 0; padding: 0; }
 body[data-mode="strip"] header,
 body[data-mode="strip"] #groups { display: none; }
-body[data-mode="strip"] #strip { position: fixed; top: 0; bottom: 0; left: 0; right: 0; height: auto; border-top: 0; }
+body[data-mode="strip"] #strip-bar { top: 0; bottom: 0; height: auto; border-top: 0; }
 
 /* Strip in icons-only mode (set by content.js): no group titles, thin strip */
 body[data-mode="strip"].compact #strip { padding: 4px 8px; gap: 6px; }
@@ -268,19 +268,78 @@ body[data-mode="strip"].compact #strip .mini-tab { width: 22px; }
 body[data-mode="strip"].compact .mini-group-label { display: none; }
 body[data-mode="strip"].compact #strip .mini-group { padding: 2px; border-width: 2px; }
 
-#strip {
+/* The strip bar: "<" button, the scrolling strip, ">" button */
+#strip-bar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   height: 80px;
   display: flex;
-  align-items: stretch; /* every item, single tab or group, has the full strip height */
-  gap: 6px;
-  padding: 10px 24px;
-  overflow-x: auto;
+  align-items: stretch;
   background: #fafafa;
   border-top: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+.strip-nav {
+  flex-shrink: 0;
+  width: 28px;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.strip-nav:last-child { border-right: 0; border-left: 1px solid #ccc; }
+
+.strip-nav:hover { background: #eee; }
+
+/* Selection actions bar, shown while tabs are checked */
+#selection-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 24px;
+  background: #fff;
+  border-bottom: 1px solid #ccc;
+}
+#selection-bar[hidden] { display: none; }
+#selection-bar button { padding: 4px 10px; cursor: pointer; }
+body[data-mode="strip"] #selection-bar { display: none; }
+
+.group li input[type="checkbox"] { flex-shrink: 0; margin: 0; }
+
+.group li .tab-favicon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.swatch {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #333;
+}
+
+.dialog-row { display: flex; align-items: center; gap: 8px; }
+.dialog-row select { padding: 4px; font-size: 14px; }
+
+/* Every item, single tab or group, has the full strip height */
+#strip {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 8px;
+  overflow-x: auto;
 }
 
 #strip .mini-tab {

@@ -33,7 +33,13 @@ function render(data) {
     scrollToSelected = true;
   }
 
+  // Forget selected tabs that no longer exist
+  for (const id of [...selectedTabIds]) {
+    if (!tabs.some(t => t.id === id)) selectedTabIds.delete(id);
+  }
+
   renderNav(groups);
+  updateSelectionBar();
 
   const container = document.getElementById("groups");
   container.textContent = "";
@@ -276,7 +282,25 @@ function renderGroup(group, groupTabs, data) {
       refresh();
     });
 
-    li.append(name, tabMenuWrap);
+    // Checkbox: selects the tab for the copy/move actions
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.title = "Select tab";
+    check.checked = selectedTabIds.has(tab.id);
+    check.addEventListener("change", () => {
+      if (check.checked) selectedTabIds.add(tab.id);
+      else selectedTabIds.delete(tab.id);
+      updateSelectionBar();
+    });
+
+    // Page icon between the checkbox and the title
+    const icon = document.createElement("img");
+    icon.className = "tab-favicon";
+    icon.alt = "";
+    if (tab.favIconUrl) icon.src = tab.favIconUrl;
+    icon.addEventListener("error", () => icon.remove()); // no icon: leave the space empty
+
+    li.append(check, icon, name, tabMenuWrap);
     list.appendChild(li);
   }
   el.appendChild(list);
@@ -443,6 +467,28 @@ function buildWindowItems(tabs, groups) {
   }
   return items;
 }
+
+// Mouse wheel scrolls the strip sideways (it is a horizontal row)
+document.getElementById("strip").addEventListener("wheel", (event) => {
+  const strip = event.currentTarget;
+  if (strip.scrollWidth <= strip.clientWidth) return; // nothing to scroll
+  event.preventDefault();
+  strip.scrollLeft += event.deltaX + event.deltaY;
+}, { passive: false });
+
+// Selection actions bar
+document.querySelectorAll("#selection-bar button[data-action]").forEach((button) => {
+  button.addEventListener("click", () => openSelectionDialog(button.dataset.action));
+});
+
+// "<" scrolls the strip to its first tab, ">" to its last tab
+document.getElementById("strip-first").addEventListener("click", () => {
+  document.getElementById("strip").scrollLeft = 0;
+});
+document.getElementById("strip-last").addEventListener("click", () => {
+  const strip = document.getElementById("strip");
+  strip.scrollLeft = strip.scrollWidth;
+});
 
 function renderStrip(data) {
   const strip = document.getElementById("strip");
@@ -756,6 +802,187 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeDialogs();
 });
 
+// Tabs checked in the group lists, for the copy/move actions
+const selectedTabIds = new Set();
+
+const ACTION_TITLES = {
+  "copy-to-group": "Copy to another group",
+  "move-to-group": "Move to another group",
+  "copy-to-new": "Copy to a new group",
+  "move-to-new": "Move to a new group",
+};
+
+// Browser colors are names; these are the CSS colors used to show them
+const CSS_COLORS = {
+  grey: "#8a8f98", blue: "#3b82f6", red: "#ef4444", yellow: "#eab308", green: "#22c55e",
+  pink: "#ec4899", purple: "#a855f7", cyan: "#06b6d4", orange: "#f97316",
+};
+
+function updateSelectionBar() {
+  const bar = document.getElementById("selection-bar");
+  bar.hidden = selectedTabIds.size === 0;
+  document.getElementById("selection-count").textContent = `${selectedTabIds.size} selected`;
+  if (MODE === "panel") postPanelBounds();
+}
+
+function groupLabel(group) {
+  return group.title || `Group ${group.id}`;
+}
+
+function colorSwatch(color) {
+  const swatch = document.createElement("span");
+  swatch.className = "swatch";
+  swatch.style.background = CSS_COLORS[color] || "#999";
+  return swatch;
+}
+
+// Copies each tab next to its original; returns the copies' ids in the same order
+async function duplicateTabs(tabIds) {
+  const copies = [];
+  for (const id of tabIds) {
+    const copy = await api.tabs.duplicate(id);
+    copies.push(copy.id);
+  }
+  return copies;
+}
+
+// Puts the tabs into a new group. Tabs are first gathered at the end of the window
+// (contiguous), grouped, and then the group is moved after the current group if asked.
+async function placeInNewGroup(tabIds, { title, position, currentGroup }) {
+  for (const id of tabIds) {
+    await api.tabs.move(id, { index: -1 });
+  }
+
+  const newGroupId = await api.tabs.group({ tabIds });
+  if (title) await api.tabGroups.update(newGroupId, { title });
+
+  if (position === "after" && currentGroup) {
+    const tabs = await api.tabs.query({ windowId: currentGroup.windowId });
+    const currentTabs = tabs.filter(t => t.groupId === currentGroup.id);
+    if (currentTabs.length > 0) {
+      const lastIndex = Math.max(...currentTabs.map(t => t.index));
+      const start = tabs.length - tabIds.length; // the block at the end of the window
+      if (lastIndex + 1 !== start) {
+        await moveTabBlock(tabIds, start, lastIndex + 1);
+      }
+    }
+  }
+  return newGroupId;
+}
+
+// Dialog for the four selection actions
+async function openSelectionDialog(action) {
+  const data = await loadData();
+  const tabIds = [...selectedTabIds];
+  if (tabIds.length === 0) return;
+
+  closeDialogs();
+  const overlay = createOverlay("selection-dialog");
+
+  const dialog = document.createElement("div");
+  dialog.className = "dialog";
+
+  const heading = document.createElement("h2");
+  heading.textContent = ACTION_TITLES[action];
+
+  const form = document.createElement("form");
+  form.className = "dialog-form";
+
+  const actions = document.createElement("div");
+  actions.className = "dialog-actions";
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.addEventListener("click", closeDialogs);
+  const okButton = document.createElement("button");
+  okButton.type = "submit";
+  okButton.textContent = "OK";
+  actions.append(cancelButton, okButton);
+
+  const finish = () => {
+    selectedTabIds.clear();
+    closeDialogs();
+    refresh();
+  };
+
+  if (action === "copy-to-group" || action === "move-to-group") {
+    // Existing group, shown with its color
+    const row = document.createElement("div");
+    row.className = "dialog-row";
+
+    const select = document.createElement("select");
+    for (const group of data.groups) {
+      const option = document.createElement("option");
+      option.value = String(group.id);
+      option.textContent = groupLabel(group);
+      select.appendChild(option);
+    }
+
+    let swatch = colorSwatch(data.groups[0]?.color);
+    const showColor = () => {
+      const group = data.groups.find(g => String(g.id) === select.value);
+      const next = colorSwatch(group?.color);
+      swatch.replaceWith(next);
+      swatch = next;
+    };
+    select.addEventListener("change", showColor);
+
+    row.append(swatch, select);
+    form.append(row);
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const groupId = Number(select.value);
+      const ids = action === "copy-to-group" ? await duplicateTabs(tabIds) : tabIds;
+      await api.tabs.group({ tabIds: ids, groupId });
+      finish();
+    });
+  } else {
+    // New group: name, and where to place it
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.placeholder = "Group name";
+
+    const placeRow = document.createElement("div");
+    placeRow.className = "dialog-row";
+    const placeLabel = document.createElement("span");
+    placeLabel.textContent = "Place a new group:";
+
+    const placeSelect = document.createElement("select");
+    const currentGroup = data.groups.find(g => g.id === selectedGroupId) || null;
+    if (currentGroup) {
+      const after = document.createElement("option");
+      after.value = "after";
+      after.textContent = "after this group";
+      placeSelect.appendChild(after);
+    }
+    const atEnd = document.createElement("option");
+    atEnd.value = "end";
+    atEnd.textContent = "at the end";
+    placeSelect.appendChild(atEnd);
+
+    placeRow.append(placeLabel, placeSelect);
+    form.append(nameInput, placeRow);
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const ids = action === "copy-to-new" ? await duplicateTabs(tabIds) : tabIds;
+      await placeInNewGroup(ids, {
+        title: nameInput.value.trim(),
+        position: placeSelect.value,
+        currentGroup,
+      });
+      finish();
+    });
+    setTimeout(() => nameInput.focus(), 0);
+  }
+
+  form.append(actions);
+  dialog.append(heading, form);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+}
+
 async function refresh() {
   render(await loadData());
 }
@@ -764,7 +991,7 @@ async function refresh() {
 // so they go through content.js and the background script (see createRemoteApi).
 // Declared after the remote tables below, which createRemoteApi reads.
 const REMOTE_CALLS = {
-  tabs: ["query", "get", "move", "group", "ungroup", "update", "create"],
+  tabs: ["query", "get", "move", "group", "ungroup", "update", "create", "duplicate"],
   tabGroups: ["query", "get", "update"],
   windows: ["getCurrent", "update"],
   search: ["search"],

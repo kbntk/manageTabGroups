@@ -14,6 +14,7 @@ browser.action.onClicked.addListener(async () => {
 // those frames cannot reach. content.js relays them here. Only these are allowed.
 const ALLOWED_CALLS = new Set([
   "tabs.query", "tabs.get", "tabs.move", "tabs.group", "tabs.ungroup", "tabs.update", "tabs.create",
+  "tabs.duplicate",
   "tabGroups.query", "tabGroups.get", "tabGroups.update",
   "windows.getCurrent", "windows.update",
   "search.search",
