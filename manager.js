@@ -2,6 +2,14 @@
 // All groups in the current window are rendered as columns;
 // clicking a group (or a nav button) makes it the active, enlarged one.
 
+// "page": the manager tab. "panel": overlay iframe on a web page. "strip": bottom strip iframe on a web page.
+const MODE = new URLSearchParams(location.search).get("mode") || "page";
+document.body.dataset.mode = MODE;
+if (MODE === "panel") {
+  // The panel's document must be transparent too, not only its body
+  document.documentElement.style.background = "transparent";
+}
+
 const COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
 const TAB_GROUP_ID_NONE = -1; // browser.tabGroups.TAB_GROUP_ID_NONE
 
@@ -11,9 +19,9 @@ let draggedTab = null; // { id, index, groupId } while a tab row is being dragge
 let draggedGroup = null; // { id, tabIds, start, count } while a group block is dragged in the strip
 
 async function loadData() {
-  const win = await browser.windows.getCurrent();
-  const groups = await browser.tabGroups.query({ windowId: win.id });
-  const tabs = await browser.tabs.query({ windowId: win.id });
+  const win = await api.windows.getCurrent();
+  const groups = await api.tabGroups.query({ windowId: win.id });
+  const tabs = await api.tabs.query({ windowId: win.id });
   const activeTab = tabs.find(t => t.active);
   return { windowId: win.id, groups, tabs, activeTab };
 }
@@ -53,6 +61,16 @@ function render(data) {
   });
 
   renderStrip(data);
+
+  // Panel mode: tell the page how far down the groups go, so only that area covers the page
+  if (MODE === "panel") {
+    const bottoms = [...container.querySelectorAll(".group")]
+      .map(el => el.getBoundingClientRect().bottom);
+    sendToEmbedder({
+      type: "mtg-bounds",
+      height: bottoms.length ? Math.max(...bottoms) : 0
+    });
+  }
 
   if (scrollToSelected) {
     scrollToSelected = false;
@@ -149,7 +167,7 @@ function renderGroup(group, groupTabs, data) {
     colorSelect.appendChild(opt);
   }
   colorSelect.addEventListener("change", async () => {
-    await browser.tabGroups.update(group.id, { color: colorSelect.value });
+    await api.tabGroups.update(group.id, { color: colorSelect.value });
     refresh();
   });
   colorRow.appendChild(colorSelect);
@@ -193,7 +211,7 @@ function renderGroup(group, groupTabs, data) {
     const removeItem = document.createElement("button");
     removeItem.textContent = "Remove tab from group";
     removeItem.addEventListener("click", async () => {
-      await browser.tabs.ungroup(tab.id);
+      await api.tabs.ungroup(tab.id);
       refresh();
     });
 
@@ -257,7 +275,7 @@ function renderGroup(group, groupTabs, data) {
         newIndex = from < target ? target : target + 1;
       }
 
-      await browser.tabs.move(movedId, { index: newIndex });
+      await api.tabs.move(movedId, { index: newIndex });
       await restoreGroupMembership(group.id, [movedId], { title: group.title, color: group.color });
       refresh();
     });
@@ -287,12 +305,12 @@ async function moveTabBlock(tabIds, start, newStart) {
   if (newStart < start) {
     // Moving left: first tab first, each lands before the not-yet-moved ones
     for (let i = 0; i < tabIds.length; i++) {
-      await browser.tabs.move(tabIds[i], { index: newStart + i });
+      await api.tabs.move(tabIds[i], { index: newStart + i });
     }
   } else {
     // Moving right: last tab first, so earlier tabs are not shifted
     for (let i = tabIds.length - 1; i >= 0; i--) {
-      await browser.tabs.move(tabIds[i], { index: newStart + i });
+      await api.tabs.move(tabIds[i], { index: newStart + i });
     }
   }
 }
@@ -301,27 +319,27 @@ async function moveTabBlock(tabIds, start, newStart) {
 // Returns the id of the group the tabs ended up in. That id changes only if the
 // original group no longer exists, e.g. after all its tabs were ungrouped.
 async function restoreGroupMembership(groupId, tabIds, { title, color } = {}) {
-  const tabs = await Promise.all(tabIds.map(id => browser.tabs.get(id)));
+  const tabs = await Promise.all(tabIds.map(id => api.tabs.get(id)));
   if (tabs.every(t => t.groupId === groupId)) return groupId;
 
   let groupExists = true;
   try {
-    await browser.tabGroups.get(groupId);
+    await api.tabGroups.get(groupId);
   } catch {
     groupExists = false;
   }
 
   if (groupExists) {
-    await browser.tabs.group({ tabIds, groupId });
+    await api.tabs.group({ tabIds, groupId });
     return groupId;
   }
 
-  const newGroupId = await browser.tabs.group({ tabIds });
+  const newGroupId = await api.tabs.group({ tabIds });
   const props = {};
   if (title) props.title = title;
   if (color) props.color = color;
   if (Object.keys(props).length > 0) {
-    await browser.tabGroups.update(newGroupId, props);
+    await api.tabGroups.update(newGroupId, props);
   }
   return newGroupId;
 }
@@ -352,33 +370,33 @@ function toUrl(text) {
 async function addNewTabToGroup(group, text) {
   const url = toUrl(text);
   if (url) {
-    const tab = await browser.tabs.create({ url, windowId: group.windowId, active: true });
-    await browser.tabs.group({ tabIds: [tab.id], groupId: group.id });
+    const tab = await api.tabs.create({ url, windowId: group.windowId, active: true });
+    await api.tabs.group({ tabIds: [tab.id], groupId: group.id });
     return;
   }
 
   // Search opens the tab itself, so find the tab that appeared and group it
-  const before = new Set((await browser.tabs.query({ windowId: group.windowId })).map(t => t.id));
-  await browser.search.search({ query: text, disposition: "NEW_TAB" });
-  const created = (await browser.tabs.query({ windowId: group.windowId }))
+  const before = new Set((await api.tabs.query({ windowId: group.windowId })).map(t => t.id));
+  await api.search.search({ query: text, disposition: "NEW_TAB" });
+  const created = (await api.tabs.query({ windowId: group.windowId }))
     .filter(t => !before.has(t.id));
   if (created.length > 0) {
-    await browser.tabs.group({ tabIds: created.map(t => t.id), groupId: group.id });
+    await api.tabs.group({ tabIds: created.map(t => t.id), groupId: group.id });
   }
 }
 
 // Switch the browser to a specific tab (and its window)
 async function goToTab(tab) {
-  await browser.windows.update(tab.windowId, { focused: true });
-  await browser.tabs.update(tab.id, { active: true });
+  await api.windows.update(tab.windowId, { focused: true });
+  await api.tabs.update(tab.id, { active: true });
 }
 
 // Jump to the group's first tab in the browser
 async function goToGroup(groupTabs) {
   const first = groupTabs[0];
   if (!first) return;
-  await browser.windows.update(first.windowId, { focused: true });
-  await browser.tabs.update(first.id, { active: true });
+  await api.windows.update(first.windowId, { focused: true });
+  await api.tabs.update(first.id, { active: true });
 }
 
 function closeAllMenus() {
@@ -440,8 +458,17 @@ function renderStrip(data) {
 
 function renderMiniTab(item) {
   const el = createMiniTab(item.tab);
+  el.addEventListener("click", () => {
+    if (MODE === "strip") sendToEmbedder({ type: "mtg-open", groupId: null });
+  });
+  el.addEventListener("dblclick", () => goToTab(item.tab));
   attachStripDropTarget(el, item);
   return el;
+}
+
+// Messages to the page that embeds this view (see content.js). No-op on the manager tab.
+function sendToEmbedder(message) {
+  if (window.parent !== window) window.parent.postMessage(message, "*");
 }
 
 // A miniature tab showing the page icon (falls back to a plain box if none)
@@ -475,13 +502,25 @@ function renderMiniGroup(item) {
   const tabsRow = document.createElement("div");
   tabsRow.className = "mini-group-tabs";
   for (const tab of item.tabs) {
-    tabsRow.appendChild(createMiniTab(tab));
+    const mini = createMiniTab(tab);
+    // Double-click a tab inside the block goes to that tab, not to the group's first tab
+    mini.addEventListener("dblclick", (event) => {
+      event.stopPropagation();
+      goToTab(tab);
+    });
+    tabsRow.appendChild(mini);
   }
 
   el.append(label, tabsRow);
 
+  el.addEventListener("dblclick", () => goToGroup(item.tabs));
+
   el.addEventListener("click", () => {
-    if (selectedGroupId !== item.group.id) selectGroup(item.group.id);
+    if (MODE === "strip") {
+      sendToEmbedder({ type: "mtg-open", groupId: item.group.id });
+    } else if (selectedGroupId !== item.group.id) {
+      selectGroup(item.group.id);
+    }
   });
 
   el.addEventListener("dragstart", (event) => {
@@ -606,7 +645,7 @@ function openRenameDialog(group) {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    await browser.tabGroups.update(group.id, { title: input.value.trim() });
+    await api.tabGroups.update(group.id, { title: input.value.trim() });
     closeDialogs();
     refresh();
   });
@@ -625,8 +664,8 @@ function openRenameDialog(group) {
 
 async function openTabPicker(group) {
   closeDialogs();
-  const managerUrl = browser.runtime.getURL("manager.html");
-  const tabs = (await browser.tabs.query({ windowId: group.windowId }))
+  const managerUrl = api.runtime.getURL("manager.html");
+  const tabs = (await api.tabs.query({ windowId: group.windowId }))
     .filter(t => t.groupId === TAB_GROUP_ID_NONE && t.url !== managerUrl);
 
   const overlay = createOverlay("tab-picker");
@@ -672,7 +711,7 @@ async function openTabPicker(group) {
       addButton.textContent = "+";
       addButton.title = "Move this tab to the group";
       addButton.addEventListener("click", async () => {
-        await browser.tabs.group({ tabIds: [tab.id], groupId: group.id });
+        await api.tabs.group({ tabIds: [tab.id], groupId: group.id });
         closeDialogs();
         refresh();
       });
@@ -725,13 +764,106 @@ async function refresh() {
   render(await loadData());
 }
 
+// Extension APIs. On a web page, the strip and panel iframes cannot reach them directly,
+// so they go through content.js and the background script (see createRemoteApi).
+// Declared after the remote tables below, which createRemoteApi reads.
+const REMOTE_CALLS = {
+  tabs: ["query", "get", "move", "group", "ungroup", "update", "create"],
+  tabGroups: ["query", "get", "update"],
+  windows: ["getCurrent", "update"],
+  search: ["search"],
+};
+
+const REMOTE_EVENTS = {
+  tabs: ["onCreated", "onRemoved", "onUpdated", "onMoved", "onAttached", "onDetached", "onActivated"],
+  tabGroups: ["onCreated", "onUpdated", "onRemoved", "onMoved"],
+};
+
+const api = MODE === "page" ? browser : createRemoteApi();
+
+function createRemoteApi() {
+  let nextId = 1;
+  const pending = new Map();   // call id -> { resolve, reject }
+  const listeners = new Map(); // "tabs.onCreated" -> Set of callbacks
+
+  for (const [ns, events] of Object.entries(REMOTE_EVENTS)) {
+    for (const ev of events) listeners.set(`${ns}.${ev}`, new Set());
+  }
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent || !event.data) return;
+
+    if (event.data.type === "mtg-rpc-result") {
+      const call = pending.get(event.data.id);
+      if (!call) return;
+      pending.delete(event.data.id);
+      if (event.data.ok) call.resolve(event.data.result);
+      else call.reject(new Error(event.data.error));
+    } else if (event.data.type === "mtg-event") {
+      for (const name of event.data.names || []) {
+        listeners.get(name)?.forEach(callback => callback());
+      }
+    }
+  });
+
+  function call(path, args) {
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, { resolve, reject });
+      window.parent.postMessage({ type: "mtg-rpc", id, path, args }, "*");
+    });
+  }
+
+  const remote = {
+    runtime: { getURL: (path) => new URL(path, location.href).href },
+  };
+
+  for (const [ns, methods] of Object.entries(REMOTE_CALLS)) {
+    remote[ns] = {};
+    for (const method of methods) {
+      remote[ns][method] = (...args) => call(`${ns}.${method}`, args);
+    }
+  }
+
+  for (const [ns, events] of Object.entries(REMOTE_EVENTS)) {
+    remote[ns] = remote[ns] || {};
+    for (const ev of events) {
+      remote[ns][ev] = { addListener: (callback) => listeners.get(`${ns}.${ev}`).add(callback) };
+    }
+  }
+
+  return remote;
+}
+
+// Panel mode: minimize button and selection requests from the embedding page
+if (MODE === "panel") {
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    if (event.data?.type === "mtg-select" && event.data.groupId != null) {
+      selectGroup(event.data.groupId);
+    }
+  });
+
+  document.getElementById("minimize").addEventListener("click", async () => {
+    const data = await loadData();
+    const group = data.groups.find(g => g.id === selectedGroupId);
+    sendToEmbedder({
+      type: "mtg-minimize",
+      groupId: selectedGroupId,
+      title: group ? (group.title || `Group ${group.id}`) : ""
+    });
+  });
+
+  sendToEmbedder({ type: "mtg-ready" });
+}
+
 // Refresh on browser-side changes
 const refreshEvents = [
-  browser.tabs.onCreated, browser.tabs.onRemoved, browser.tabs.onUpdated,
-  browser.tabs.onMoved, browser.tabs.onAttached, browser.tabs.onDetached,
-  browser.tabs.onActivated,
-  browser.tabGroups.onCreated, browser.tabGroups.onUpdated, browser.tabGroups.onRemoved,
-  browser.tabGroups.onMoved
+  api.tabs.onCreated, api.tabs.onRemoved, api.tabs.onUpdated,
+  api.tabs.onMoved, api.tabs.onAttached, api.tabs.onDetached,
+  api.tabs.onActivated,
+  api.tabGroups.onCreated, api.tabGroups.onUpdated, api.tabGroups.onRemoved,
+  api.tabGroups.onMoved
 ];
 for (const event of refreshEvents) {
   event.addListener(refresh);

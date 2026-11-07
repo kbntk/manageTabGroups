@@ -37,6 +37,7 @@ h1 { margin: 0 0 8px; font-size: 20px; font-weight: normal; }
 .group {
   width: 240px;
   min-height: 260px;
+  background: #fff; /* stays opaque in the transparent panel */
   border: 1px solid #333;
   padding: 12px;
   position: relative;
@@ -224,7 +225,32 @@ select.color { font-size: 12px; }
 .group li.drop-after { box-shadow: inset 0 -2px 0 #111; }
 
 /* Bottom strip: all tabs of the window in order, miniaturized */
-body { padding-bottom: 96px; }
+body[data-mode="page"] { padding-bottom: 96px; }
+
+/* Panel mode: the overlay on a web page. Transparent except for the group windows and
+   the "<" / ">" buttons. No header and no strip (the strip is shown separately). */
+body[data-mode="panel"] { padding-bottom: 0; background: transparent; }
+body[data-mode="panel"] #strip,
+body[data-mode="panel"] header { display: none; }
+
+.minimize { display: none; }
+body[data-mode="panel"] .minimize {
+  display: block;
+  position: fixed;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  padding: 2px 8px;
+  border: 1px solid #333;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* Strip mode: the strip alone fills its iframe on a web page */
+body[data-mode="strip"] { margin: 0; padding: 0; }
+body[data-mode="strip"] header,
+body[data-mode="strip"] #groups { display: none; }
+body[data-mode="strip"] #strip { position: fixed; top: 0; bottom: 0; left: 0; right: 0; height: auto; border-top: 0; }
 
 #strip {
   position: fixed;
