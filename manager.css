@@ -28,7 +28,9 @@ h1 { margin: 0 0 8px; font-size: 20px; font-weight: normal; }
   display: flex;
   gap: 24px;
   align-items: center; /* all groups centered on the row, i.e. on the tallest one (the active group) */
-  padding: 24px;
+  /* Half a viewport of padding on each side lets any group, even the first or
+     last one, be scrolled into the horizontal center. */
+  padding: 24px 50vw;
   overflow-x: auto;
 }
 

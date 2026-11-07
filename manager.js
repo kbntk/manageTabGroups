@@ -6,7 +6,7 @@ const COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cya
 const TAB_GROUP_ID_NONE = -1; // browser.tabGroups.TAB_GROUP_ID_NONE
 
 let selectedGroupId = null;
-let scrollToSelected = false; // set when a group is picked from the nav, so it gets scrolled into view
+let scrollToSelected = false; // set when the selection changes, so the active group is centered
 let draggedTab = null; // { id, index, groupId } while a tab row is being dragged
 let draggedGroup = null; // { id, tabIds, start, count } while a group block is dragged in the strip
 
@@ -22,6 +22,7 @@ function render(data) {
   const { groups, tabs } = data;
   if (selectedGroupId === null && groups.length > 0) {
     selectedGroupId = groups[0].id;
+    scrollToSelected = true;
   }
 
   renderNav(groups);
@@ -56,11 +57,18 @@ function render(data) {
   if (scrollToSelected) {
     scrollToSelected = false;
     container.querySelector(".group.selected")?.scrollIntoView({
-      behavior: "smooth",
+      behavior: "instant",
       inline: "center",
       block: "nearest"
     });
   }
+}
+
+// Make a group the active one and center it horizontally
+function selectGroup(groupId) {
+  selectedGroupId = groupId;
+  scrollToSelected = true;
+  refresh();
 }
 
 // "<" / ">" button beside the selected group: switches to a neighbouring group
@@ -69,15 +77,8 @@ function createSwitchButton(label, targetGroupId, title) {
   button.className = "switch-button";
   button.textContent = label;
   button.title = title;
-  button.addEventListener("click", () => selectGroup(targetGroupId, { scroll: true }));
+  button.addEventListener("click", () => selectGroup(targetGroupId));
   return button;
-}
-
-// Make a group the active one; optionally scroll it into view (used by the nav)
-function selectGroup(groupId, { scroll = false } = {}) {
-  selectedGroupId = groupId;
-  scrollToSelected = scroll;
-  refresh();
 }
 
 function renderNav(groups) {
@@ -87,7 +88,7 @@ function renderNav(groups) {
     const btn = document.createElement("button");
     btn.textContent = group.title || `Group ${group.id}`;
     btn.classList.toggle("active", group.id === selectedGroupId);
-    btn.addEventListener("click", () => selectGroup(group.id, { scroll: true }));
+    btn.addEventListener("click", () => selectGroup(group.id));
     nav.appendChild(btn);
   }
 }
