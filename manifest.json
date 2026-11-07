@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Manage Tab Groups",
+  "version": "1.0.0",
+  "description": "View and manage tab groups: add/remove tabs, change group color.",
+  "permissions": ["tabs", "tabGroups"],
+  "action": {
+    "default_title": "Manage tab groups"
+  },
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "manage-tab-groups@example.com",
+      "strict_min_version": "139.0"
+    }
+  }
+}
