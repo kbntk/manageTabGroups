@@ -25,6 +25,8 @@
   let panelReady = false;
   let pendingSelect = null; // group to select once the panel has loaded
   let minimizedGroupId = null;
+  let dragging = false;        // a tab or group is being dragged in the strip
+  let ignoreClicksUntil = 0;   // a click right after a drag is not a click outside
 
   function style(el, props) {
     Object.assign(el.style, props);
@@ -46,7 +48,16 @@
   strip.src = browser.runtime.getURL("manager.html?mode=strip");
   strip.addEventListener("mouseenter", () => { state.hoverStrip = true; layout(); });
   strip.addEventListener("mouseleave", () => { state.hoverStrip = false; layout(); });
-  strip.addEventListener("load", () => postCompact());
+  strip.addEventListener("load", () => { postCompact(); postActive(); });
+
+  // Group that is active in the open panel; the strip highlights it
+  let activeGroupId = null;
+  function postActive() {
+    strip.contentWindow?.postMessage(
+      { type: "mtg-active", groupId: state.open ? activeGroupId : null },
+      EXT_ORIGIN
+    );
+  }
 
   // Icons-only mode lasts until the pointer is over the strip; hovering shows the full strip
   function isCompact() {
@@ -134,7 +145,7 @@
   // A click anywhere outside the panel and the strip closes the panel and makes the strip
   // icons only. Clicks inside the iframes (panel, strip) do not reach this page's document.
   function closePanelFromOutside() {
-    if (!state.open) return;
+    if (!state.open || dragging || Date.now() < ignoreClicksUntil) return;
     state.open = false;
     state.compact = true;
     if (panel) panel.style.display = "none";
@@ -151,6 +162,7 @@
     else if (stripCollapsed) stripHeight = STRIP_COLLAPSED;
     strip.style.height = `${stripHeight}px`;
     postCompact();
+    postActive();
 
     bar.style.display = state.minimized ? "block" : "none";
     const barHeight = state.hoverBar ? BAR_EXPANDED : BAR_COLLAPSED;
@@ -182,6 +194,12 @@
     if (type === "mtg-bounds" && panel && event.source === panel.contentWindow) {
       // Only the groups area is the panel: the rest stays transparent and clickable
       panel.style.height = `${Math.max(0, Math.ceil(event.data.height))}px`;
+    } else if (type === "mtg-active" && panel && event.source === panel.contentWindow) {
+      activeGroupId = groupId ?? null;
+      postActive();
+    } else if (type === "mtg-drag" && event.source === strip.contentWindow) {
+      dragging = Boolean(event.data.on);
+      if (!dragging) ignoreClicksUntil = Date.now() + 300;
     } else if (type === "mtg-open") {
       openPanel(groupId ?? null);
     } else if (type === "mtg-close") {

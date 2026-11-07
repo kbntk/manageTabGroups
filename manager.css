@@ -37,6 +37,7 @@ h1 { margin: 0 0 8px; font-size: 20px; font-weight: normal; }
 .group {
   width: 240px;
   min-height: 260px;
+  border-radius: 12px; /* rounded group windows (no overflow:hidden, so the "..." menu is not clipped) */
   background: #fff; /* stays opaque in the transparent panel */
   border: 1px solid #333;
   padding: 12px;
@@ -91,6 +92,8 @@ h1 { margin: 0 0 8px; font-size: 20px; font-weight: normal; }
 }
 
 .group li span.title {
+  flex: 1 1 auto; /* title takes the free space, so the "..." button sits at the right edge */
+  min-width: 0;   /* let long titles shrink and ellipsize */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -220,6 +223,9 @@ select.color { font-size: 12px; }
 
 .group li.dragging { opacity: 0.4; }
 
+/* Tab under the mouse cursor */
+.group li:hover { background: #ffe94d; }
+
 .group li.drop-before { box-shadow: inset 0 2px 0 #111; }
 
 .group li.drop-after { box-shadow: inset 0 -2px 0 #111; }
@@ -249,7 +255,7 @@ body[data-mode="panel"] .minimize {
   position: fixed;
   top: 4px;
   right: 4px;
-  z-index: 2;
+  z-index: 1100; /* above the header, which spans the full width and would otherwise cover it */
   padding: 2px 8px;
   border: 1px solid #333;
   background: #fff;
@@ -371,6 +377,9 @@ body[data-mode="strip"] #selection-bar { display: none; }
 }
 
 #strip .mini-group.dragging { opacity: 0.4; }
+
+/* Group active in the open panel: same yellow as the hovered tab */
+#strip .mini-group.active { background: #ffe94d; }
 
 #strip .mini-group-label {
   max-width: 140px;

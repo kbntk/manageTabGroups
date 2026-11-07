@@ -14,9 +14,13 @@ const COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cya
 const TAB_GROUP_ID_NONE = -1; // browser.tabGroups.TAB_GROUP_ID_NONE
 
 let selectedGroupId = null;
+let lastData = null;            // last loaded window data, to redraw the strip
+let stripActiveGroupId = null;  // strip mode: group selected in the open panel, shown highlighted
+let scrollStripToActive = false; // set when the active group changes, so the strip scrolls to it
 let scrollToSelected = false; // set when the selection changes, so the active group is centered
 let draggedTab = null; // { id, index, groupId } while a tab row is being dragged
 let draggedGroup = null; // { id, tabIds, start, count } while a group block is dragged in the strip
+let draggedStripTab = null; // { id, index } while an ungrouped tab is dragged in the strip
 
 async function loadData() {
   const win = await api.windows.getCurrent();
@@ -27,6 +31,7 @@ async function loadData() {
 }
 
 function render(data) {
+  lastData = data;
   const { groups, tabs } = data;
   if (selectedGroupId === null && groups.length > 0) {
     selectedGroupId = groups[0].id;
@@ -68,7 +73,11 @@ function render(data) {
 
   renderStrip(data);
 
-  if (MODE === "panel") postPanelBounds();
+  if (MODE === "panel") {
+    postPanelBounds();
+    // Tell the strip which group is active in the panel
+    sendToEmbedder({ type: "mtg-active", groupId: selectedGroupId });
+  }
 
   if (scrollToSelected) {
     scrollToSelected = false;
@@ -468,6 +477,12 @@ function buildWindowItems(tabs, groups) {
   return items;
 }
 
+// Tell the page while a tab or group is dragged in the strip, so that the drag does not
+// count as a click outside the panel (which would close it)
+const stripEl = document.getElementById("strip");
+stripEl.addEventListener("dragstart", () => sendToEmbedder({ type: "mtg-drag", on: true }));
+stripEl.addEventListener("dragend", () => sendToEmbedder({ type: "mtg-drag", on: false }));
+
 // Mouse wheel scrolls the strip sideways (it is a horizontal row)
 document.getElementById("strip").addEventListener("wheel", (event) => {
   const strip = event.currentTarget;
@@ -496,6 +511,20 @@ function renderStrip(data) {
   for (const item of buildWindowItems(data.tabs, data.groups)) {
     strip.appendChild(item.kind === "tab" ? renderMiniTab(item) : renderMiniGroup(item));
   }
+
+  // Bring the active group fully into view, scrolling the strip if needed (only when it changed,
+  // so manual scrolling is not undone on every refresh)
+  if (scrollStripToActive) {
+    scrollStripToActive = false;
+    const active = strip.querySelector(".mini-group.active");
+    if (active) {
+      const box = active.getBoundingClientRect();
+      const row = strip.getBoundingClientRect();
+      const margin = 8;
+      if (box.left < row.left) strip.scrollLeft += box.left - row.left - margin;
+      else if (box.right > row.right) strip.scrollLeft += box.right - row.right + margin;
+    }
+  }
 }
 
 function renderMiniTab(item) {
@@ -504,6 +533,21 @@ function renderMiniTab(item) {
     if (MODE === "strip") sendToEmbedder({ type: "mtg-open", groupId: null });
   });
   el.addEventListener("dblclick", () => goToTab(item.tab));
+
+  // Press and drag an ungrouped tab to move it along the strip
+  el.draggable = true;
+  el.addEventListener("dragstart", (event) => {
+    draggedStripTab = { id: item.tab.id, index: item.tab.index };
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(item.tab.id)); // Firefox needs data to start a drag
+    el.classList.add("dragging");
+  });
+  el.addEventListener("dragend", () => {
+    draggedStripTab = null;
+    clearDropMarkers();
+    el.classList.remove("dragging");
+  });
+
   attachStripDropTarget(el, item);
   return el;
 }
@@ -533,6 +577,7 @@ function createMiniTab(tab) {
 function renderMiniGroup(item) {
   const el = document.createElement("div");
   el.className = "mini-group";
+  if (item.group.id === stripActiveGroupId) el.classList.add("active");
   el.style.borderColor = item.group.color;
   el.draggable = true;
   el.title = "Drag to move the whole group";
@@ -590,10 +635,14 @@ function renderMiniGroup(item) {
 
 // Drop a dragged group block before or after this strip item
 function attachStripDropTarget(el, item) {
-  const isSelf = () => item.kind === "group" && draggedGroup && item.group.id === draggedGroup.id;
+  // A drag is either a group block or an ungrouped tab
+  const dragging = () => draggedGroup || draggedStripTab;
+  const isSelf = () =>
+    (item.kind === "group" && draggedGroup && item.group.id === draggedGroup.id) ||
+    (item.kind === "tab" && draggedStripTab && item.tab.id === draggedStripTab.id);
 
   el.addEventListener("dragover", (event) => {
-    if (!draggedGroup || isSelf()) return;
+    if (!dragging() || isSelf()) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     clearDropMarkers();
@@ -606,9 +655,28 @@ function attachStripDropTarget(el, item) {
 
   el.addEventListener("drop", async (event) => {
     event.preventDefault();
-    if (!draggedGroup || isSelf()) return;
+    if (!dragging() || isSelf()) return;
 
     const before = isLeftHalf(el, event);
+
+    if (draggedStripTab) {
+      // A single ungrouped tab goes just before or after this item, outside any group
+      const { id, index: from } = draggedStripTab;
+      draggedStripTab = null;
+      const draggedIsLeft = from < item.first;
+      let newStart;
+      if (before) {
+        newStart = draggedIsLeft ? item.first - 1 : item.first;
+      } else {
+        newStart = draggedIsLeft ? item.last : item.last + 1;
+      }
+      if (newStart !== from) {
+        await api.tabs.move(id, { index: newStart });
+      }
+      refresh();
+      return;
+    }
+
     const { id: groupId, title, color, tabIds, start, count } = draggedGroup;
     draggedGroup = null;
 
@@ -641,6 +709,7 @@ document.addEventListener("click", closeAllMenus);
 function closeDialogs() {
   document.getElementById("tab-picker")?.remove();
   document.getElementById("rename-dialog")?.remove();
+  document.getElementById("selection-dialog")?.remove();
 }
 
 function createOverlay(id) {
@@ -870,6 +939,30 @@ async function placeInNewGroup(tabIds, { title, position, currentGroup }) {
   return newGroupId;
 }
 
+// Adds tabs to the end of an existing group. Tabs are first gathered at the end of the
+// window, grouped, and then the block is moved right after the group's last tab.
+async function addTabsToGroupEnd(tabIds, group) {
+  for (const id of tabIds) {
+    await api.tabs.move(id, { index: -1 });
+  }
+  await api.tabs.group({ tabIds, groupId: group.id });
+  await restoreGroupMembership(group.id, tabIds, { title: group.title, color: group.color });
+
+  const all = await api.tabs.query({ windowId: group.windowId });
+  const moved = all.filter(t => tabIds.includes(t.id)).sort((a, b) => a.index - b.index);
+  const others = all.filter(t => t.groupId === group.id && !tabIds.includes(t.id));
+  if (moved.length === 0 || others.length === 0) return;
+
+  const lastIndex = Math.max(...others.map(t => t.index));
+  const start = moved[0].index;
+  const count = moved.length;
+  // Block left of the group's last tab: after removing it, the group shifts left by `count`
+  const newStart = start < lastIndex ? lastIndex - count + 1 : lastIndex + 1;
+  if (newStart !== start) {
+    await moveTabBlock(moved.map(t => t.id), start, newStart);
+  }
+}
+
 // Dialog for the four selection actions
 async function openSelectionDialog(action) {
   const data = await loadData();
@@ -934,7 +1027,7 @@ async function openSelectionDialog(action) {
       event.preventDefault();
       const groupId = Number(select.value);
       const ids = action === "copy-to-group" ? await duplicateTabs(tabIds) : tabIds;
-      await api.tabs.group({ tabIds: ids, groupId });
+      await addTabsToGroupEnd(ids, data.groups.find(g => g.id === groupId));
       finish();
     });
   } else {
@@ -1064,6 +1157,14 @@ if (MODE === "strip") {
     if (event.source !== window.parent) return;
     if (event.data?.type === "mtg-compact") {
       document.body.classList.toggle("compact", Boolean(event.data.on));
+    } else if (event.data?.type === "mtg-active") {
+      const next = event.data.groupId ?? null;
+      // Scroll only when the active group actually changes; this message repeats on every refresh
+      if (next !== stripActiveGroupId) {
+        stripActiveGroupId = next;
+        scrollStripToActive = true;
+      }
+      if (lastData) renderStrip(lastData);
     }
   });
 }
