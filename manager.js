@@ -62,23 +62,19 @@ function render(data) {
 
   renderStrip(data);
 
-  // Panel mode: tell the page how far down the groups go, so only that area covers the page
-  if (MODE === "panel") {
-    const bottoms = [...container.querySelectorAll(".group")]
-      .map(el => el.getBoundingClientRect().bottom);
-    sendToEmbedder({
-      type: "mtg-bounds",
-      height: bottoms.length ? Math.max(...bottoms) : 0
-    });
-  }
+  if (MODE === "panel") postPanelBounds();
 
   if (scrollToSelected) {
     scrollToSelected = false;
-    container.querySelector(".group.selected")?.scrollIntoView({
-      behavior: "instant",
-      inline: "center",
-      block: "nearest"
-    });
+    // Scroll only the groups row horizontally. scrollIntoView would also scroll the
+    // page or iframe vertically and push the title out of view.
+    const selectedEl = container.querySelector(".group.selected");
+    if (selectedEl) {
+      const box = selectedEl.getBoundingClientRect();
+      const rowBox = container.getBoundingClientRect();
+      const offset = (box.left + box.width / 2) - (rowBox.left + container.clientWidth / 2);
+      container.scrollLeft += offset;
+    }
   }
 }
 
@@ -835,23 +831,41 @@ function createRemoteApi() {
   return remote;
 }
 
+// Strip mode: icons-only layout when the page's panel was closed by a click outside it
+if (MODE === "strip") {
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    if (event.data?.type === "mtg-compact") {
+      document.body.classList.toggle("compact", Boolean(event.data.on));
+    }
+  });
+}
+
+// Panel mode: tell the page how far down the title and the groups go, so the panel's
+// iframe covers exactly that. Nothing is measured while the panel is hidden.
+function postPanelBounds() {
+  if (!window.innerWidth) return; // hidden iframe: no layout to measure
+  const boxes = [document.querySelector("header"), ...document.querySelectorAll("#groups .group")]
+    .filter(Boolean)
+    .map(el => el.getBoundingClientRect().bottom);
+  sendToEmbedder({
+    type: "mtg-bounds",
+    height: Math.max(0, ...boxes) + 56 // 56px spare so nothing is cut off at the bottom
+  });
+}
+
 // Panel mode: minimize button and selection requests from the embedding page
 if (MODE === "panel") {
   window.addEventListener("message", (event) => {
     if (event.source !== window.parent) return;
+    if (event.data?.type === "mtg-measure") postPanelBounds();
     if (event.data?.type === "mtg-select" && event.data.groupId != null) {
       selectGroup(event.data.groupId);
     }
   });
 
-  document.getElementById("minimize").addEventListener("click", async () => {
-    const data = await loadData();
-    const group = data.groups.find(g => g.id === selectedGroupId);
-    sendToEmbedder({
-      type: "mtg-minimize",
-      groupId: selectedGroupId,
-      title: group ? (group.title || `Group ${group.id}`) : ""
-    });
+  document.getElementById("minimize").addEventListener("click", () => {
+    sendToEmbedder({ type: "mtg-close" });
   });
 
   sendToEmbedder({ type: "mtg-ready" });

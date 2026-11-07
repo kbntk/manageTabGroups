@@ -231,7 +231,17 @@ body[data-mode="page"] { padding-bottom: 96px; }
    the "<" / ">" buttons. No header and no strip (the strip is shown separately). */
 body[data-mode="panel"] { padding-bottom: 0; background: transparent; }
 body[data-mode="panel"] #strip,
-body[data-mode="panel"] header { display: none; }
+body[data-mode="panel"] #group-nav { display: none; }
+
+/* Panel title: shown above the groups, on top of them */
+body[data-mode="panel"] header {
+  display: block;
+  position: relative;
+  z-index: 1000;
+  padding: 8px 16px 0;
+  border-bottom: 0;
+}
+body[data-mode="panel"] header h1 { margin: 0; }
 
 .minimize { display: none; }
 body[data-mode="panel"] .minimize {
@@ -251,6 +261,12 @@ body[data-mode="strip"] { margin: 0; padding: 0; }
 body[data-mode="strip"] header,
 body[data-mode="strip"] #groups { display: none; }
 body[data-mode="strip"] #strip { position: fixed; top: 0; bottom: 0; left: 0; right: 0; height: auto; border-top: 0; }
+
+/* Strip in icons-only mode (set by content.js): no group titles, thin strip */
+body[data-mode="strip"].compact #strip { padding: 4px 8px; gap: 6px; }
+body[data-mode="strip"].compact #strip .mini-tab { width: 22px; }
+body[data-mode="strip"].compact .mini-group-label { display: none; }
+body[data-mode="strip"].compact #strip .mini-group { padding: 2px; border-width: 2px; }
 
 #strip {
   position: fixed;

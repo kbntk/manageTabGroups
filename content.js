@@ -6,12 +6,14 @@
   const EXT_ORIGIN = new URL(browser.runtime.getURL("")).origin;
   const STRIP_HEIGHT = 80;   // px, expanded strip
   const STRIP_COLLAPSED = 8; // px, minimized state without hover
+  const STRIP_COMPACT = 26;  // px, strip with icons only, after a click outside the panel
   const BAR_COLLAPSED = 8;   // px, minimized bar without hover
   const BAR_EXPANDED = 28;   // px, minimized bar on hover
 
   const state = {
     open: false,      // panel visible
     minimized: false, // panel minimized to the bar
+    compact: false,   // panel closed by a click outside it: strip shows icons only
     hoverStrip: false,
     hoverBar: false,
   };
@@ -41,6 +43,17 @@
   strip.src = browser.runtime.getURL("manager.html?mode=strip");
   strip.addEventListener("mouseenter", () => { state.hoverStrip = true; layout(); });
   strip.addEventListener("mouseleave", () => { state.hoverStrip = false; layout(); });
+  strip.addEventListener("load", () => postCompact());
+
+  // Icons-only mode lasts until the pointer is over the strip; hovering shows the full strip
+  function isCompact() {
+    return state.compact && !state.hoverStrip;
+  }
+
+  // Tell the strip whether to show icons only
+  function postCompact() {
+    strip.contentWindow?.postMessage({ type: "mtg-compact", on: isCompact() }, EXT_ORIGIN);
+  }
 
   // Minimized bar with the group name, top right
   const bar = style(document.createElement("div"), {
@@ -94,25 +107,47 @@
   function openPanel(groupId) {
     state.open = true;
     state.minimized = false;
+    state.compact = false;
     if (!panel) panel = createPanel();
     panel.style.display = "block";
+    // The panel was hidden while it rendered, so ask it to measure itself now
+    panel.contentWindow?.postMessage({ type: "mtg-measure" }, EXT_ORIGIN);
     if (groupId != null) selectInPanel(groupId);
+    postCompact();
     layout();
   }
 
   function minimizePanel(groupId, title) {
     state.open = false;
     state.minimized = true;
+    state.compact = false;
     minimizedGroupId = groupId;
     if (panel) panel.style.display = "none";
     bar.textContent = title || "Group";
+    postCompact();
     layout();
   }
+
+  // A click anywhere outside the panel and the strip closes the panel and makes the strip
+  // icons only. Clicks inside the iframes (panel, strip) do not reach this page's document.
+  function closePanelFromOutside() {
+    if (!state.open) return;
+    state.open = false;
+    state.compact = true;
+    if (panel) panel.style.display = "none";
+    postCompact();
+    layout();
+  }
+  window.addEventListener("click", closePanelFromOutside, true);
 
   // Strip and bar sizes depend on the state and hover
   function layout() {
     const stripCollapsed = state.minimized && !state.hoverStrip;
-    strip.style.height = `${stripCollapsed ? STRIP_COLLAPSED : STRIP_HEIGHT}px`;
+    let stripHeight = STRIP_HEIGHT;
+    if (isCompact()) stripHeight = STRIP_COMPACT;
+    else if (stripCollapsed) stripHeight = STRIP_COLLAPSED;
+    strip.style.height = `${stripHeight}px`;
+    postCompact();
 
     bar.style.display = state.minimized ? "block" : "none";
     const barHeight = state.hoverBar ? BAR_EXPANDED : BAR_COLLAPSED;
@@ -146,10 +181,11 @@
       panel.style.height = `${Math.max(0, Math.ceil(event.data.height))}px`;
     } else if (type === "mtg-open") {
       openPanel(groupId ?? null);
-    } else if (type === "mtg-minimize") {
-      minimizePanel(groupId ?? null, title);
+    } else if (type === "mtg-close") {
+      closePanelFromOutside();
     } else if (type === "mtg-ready" && panel && event.source === panel.contentWindow) {
       panelReady = true;
+      if (state.open) panel.contentWindow.postMessage({ type: "mtg-measure" }, EXT_ORIGIN);
       if (pendingSelect != null) {
         selectInPanel(pendingSelect);
         pendingSelect = null;
