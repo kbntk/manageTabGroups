@@ -3,7 +3,7 @@
   "name": "Manage Tab Groups",
   "version": "1.0.0",
   "description": "View and manage tab groups: add/remove tabs, change group color.",
-  "permissions": ["tabs", "tabGroups", "search"],
+  "permissions": ["tabs", "tabGroups", "search", "storage"],
   "action": {
     "default_title": "Manage tab groups"
   },

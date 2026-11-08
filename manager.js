@@ -636,7 +636,20 @@ stripEl.addEventListener("mouseover", (event) => {
   else hideStripTip();
 });
 stripEl.addEventListener("mouseleave", hideStripTip);
-stripEl.addEventListener("scroll", hideStripTip);
+stripEl.addEventListener("scroll", () => { hideStripTip(); postStripTitles(); });
+
+// The tab under the pointer: its title on the web page gets a yellow background
+let lastTitleHoverId = null;
+function setTitleHover(tabId) {
+  if (tabId === lastTitleHoverId) return;
+  lastTitleHoverId = tabId;
+  sendToEmbedder({ type: "mtg-title-hover", tabId });
+}
+stripEl.addEventListener("mouseover", (event) => {
+  setTitleHover(event.target.closest(".mini-tab")?.dataset.tabId ?? null);
+});
+stripEl.addEventListener("mouseleave", () => setTitleHover(null));
+window.addEventListener("resize", postStripTitles);
 
 // Mouse wheel scrolls the strip sideways (it is a horizontal row)
 document.getElementById("strip").addEventListener("wheel", (event) => {
@@ -721,6 +734,7 @@ function renderStrip(data) {
   for (const item of items) {
     strip.appendChild(item.kind === "tab" ? renderMiniTab(item) : renderMiniGroup(item));
   }
+  postStripTitles();
 
   // Bring the active group fully into view, scrolling the strip if needed (only when it changed,
   // so manual scrolling is not undone on every refresh)
@@ -763,6 +777,23 @@ function renderMiniTab(item) {
 // Messages to the page that embeds this view (see content.js). No-op on the manager tab.
 function sendToEmbedder(message) {
   if (window.parent !== window) window.parent.postMessage(message, "*");
+}
+
+// Strip mode: send the page each visible tab's x position and title, so content.js can draw the
+// titles above the strip, on the web page. Nothing is sent while the strip is compact.
+function postStripTitles() {
+  if (MODE !== "strip") return;
+  const strip = document.getElementById("strip");
+  const items = [];
+  if (!document.body.classList.contains("compact")) {
+    const frame = strip.getBoundingClientRect();
+    for (const el of strip.querySelectorAll(".mini-tab")) {
+      const r = el.getBoundingClientRect();
+      if (r.right <= frame.left || r.left >= frame.right) continue; // scrolled out of view
+      items.push({ id: el.dataset.tabId, x: r.left + 4, title: el.dataset.title });
+    }
+  }
+  sendToEmbedder({ type: "mtg-titles", items });
 }
 
 // A miniature tab showing the page icon (falls back to a plain box if none)
@@ -1381,6 +1412,7 @@ if (MODE === "strip") {
     if (event.source !== window.parent) return;
     if (event.data?.type === "mtg-compact") {
       document.body.classList.toggle("compact", Boolean(event.data.on));
+      postStripTitles();
     } else if (event.data?.type === "mtg-active") {
       const next = event.data.groupId ?? null;
       // Scroll only when the active group actually changes; this message repeats on every refresh
@@ -1490,3 +1522,12 @@ for (const event of refreshEvents) {
 
 
 refresh();
+
+// Setting: titles above the bottom strip on web pages. Stored in browser.storage.local; content.js follows it.
+const showTitlesBox = document.getElementById("show-titles");
+browser.storage.local.get({ showStripTitles: true }).then((settings) => {
+  showTitlesBox.checked = settings.showStripTitles;
+}).catch(() => {});
+showTitlesBox.addEventListener("change", () => {
+  browser.storage.local.set({ showStripTitles: showTitlesBox.checked }).catch(() => {});
+});

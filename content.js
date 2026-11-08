@@ -4,7 +4,7 @@
 // with postMessage; messages are accepted only from our own extension origin.
 (() => {
   const EXT_ORIGIN = new URL(browser.runtime.getURL("")).origin;
-  const STRIP_HEIGHT = 80;   // px, expanded strip
+  const STRIP_HEIGHT = 80;   // px, expanded strip (same height as the manager's bottom bar)
   const TOOLS_HEIGHT = 30;   // px, the "center" button and filter row above the strip
   // Highest z-index a page can use. Sites such as bbc.com have sticky menus with z-index
   // above 1000, which covered the panel's title; the panel must stay on top of them.
@@ -222,6 +222,15 @@
     } else if (type === "mtg-active" && panel && event.source === panel.contentWindow) {
       activeGroupId = groupId ?? null;
       postActive();
+    } else if (type === "mtg-titles" && event.source === strip.contentWindow) {
+      if (!showStripTitles) return;
+      titleLayer.style.bottom = strip.style.height; // the titles start on the strip's top edge
+      renderTitles(event.data.items ?? []);
+    } else if (type === "mtg-title-hover" && event.source === strip.contentWindow) {
+      hoveredTitleId = event.data.tabId ?? null;
+      for (const el of titleLayer.children) {
+        el.style.background = el.dataset.id === hoveredTitleId ? "#ffe94d" : "";
+      }
     } else if (type === "mtg-drag" && event.source === strip.contentWindow) {
       dragging = Boolean(event.data.on);
       if (!dragging) ignoreClicksUntil = Date.now() + 300;
@@ -246,6 +255,51 @@
     if (panelLoaded) panel.contentWindow.postMessage({ type: "mtg-event", names: message.names }, EXT_ORIGIN);
   });
 
-  document.documentElement.append(strip, bar);
+  // Tab titles drawn over the web page, above the strip (an iframe cannot draw outside itself)
+  const titleLayer = style(document.createElement("div"), {
+    position: "fixed",
+    left: "0",
+    width: "100%",
+    height: "0",
+    bottom: "0",
+    pointerEvents: "none",
+    zIndex: "999",
+  });
+  let hoveredTitleId = null; // tab under the pointer in the strip: its title gets a yellow background
+  function renderTitles(items) {
+    titleLayer.textContent = "";
+    for (const { id, x, title } of items) {
+      const el = document.createElement("div");
+      el.dataset.id = id;
+      el.textContent = title;
+      style(el, {
+        position: "absolute",
+        left: `${x}px`,
+        bottom: "0",              // starts on the strip's top edge
+        whiteSpace: "nowrap",     // the full page title, no length limit
+        font: "11px system-ui, sans-serif",
+        lineHeight: "14px",
+        color: "#111",
+        background: id === hoveredTitleId ? "#ffe94d" : "",
+        transformOrigin: "left bottom",
+        transform: "rotate(-45deg)",
+      });
+      titleLayer.appendChild(el);
+    }
+  }
+
+  // Setting from the options page (options.js); on by default
+  let showStripTitles = true;
+  browser.storage.local.get({ showStripTitles: true }).then((settings) => {
+    showStripTitles = settings.showStripTitles;
+    if (!showStripTitles) titleLayer.textContent = "";
+  });
+  browser.storage.onChanged.addListener((changes) => {
+    if (!("showStripTitles" in changes)) return;
+    showStripTitles = changes.showStripTitles.newValue;
+    if (!showStripTitles) titleLayer.textContent = "";
+  });
+
+  document.documentElement.append(strip, bar, titleLayer);
   layout();
 })();
