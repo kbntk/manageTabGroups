@@ -13,6 +13,10 @@ if (MODE === "panel") {
 // The panel's close button. In panel mode it is moved onto the active group window (top right corner).
 const closeButton = document.getElementById("minimize");
 
+// Panel mode: "..." and "×" at the top right of the active group window. The "..." menu
+// offers "Ungroup tabs" for the active group.
+const panelActions = MODE === "panel" ? buildPanelActions() : null;
+
 const COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
 const TAB_GROUP_ID_NONE = -1; // browser.tabGroups.TAB_GROUP_ID_NONE
 
@@ -20,10 +24,12 @@ let selectedGroupId = null;
 let lastData = null;            // last loaded window data, to redraw the strip
 let stripActiveGroupId = null;  // strip mode: group selected in the open panel, shown highlighted
 let scrollStripToActive = false; // set when the active group changes, so the strip scrolls to it
+let stripFilter = "";            // lowercased text from the strip's filter field ("" = show all)
 let scrollToSelected = false; // set when the selection changes, so the active group is centered
 let draggedTab = null; // { id, index, groupId } while a tab row is being dragged
 let draggedGroup = null; // { id, tabIds, start, count } while a group block is dragged in the strip
 let draggedStripTab = null; // { id, index } while an ungrouped tab is dragged in the strip
+let draggedPanelGroup = null; // { id, title, color, tabIds, start, count } while a group's bar is dragged in the panel
 
 async function loadData() {
   const win = await api.windows.getCurrent();
@@ -79,7 +85,7 @@ function render(data) {
   if (MODE === "panel") {
     // Close button sits on the active group's top right corner (or at the body if no group)
     const host = container.querySelector(".group.selected") || document.body;
-    host.appendChild(closeButton);
+    host.appendChild(panelActions);
 
     postPanelBounds();
     // Tell the strip which group is active in the panel
@@ -134,6 +140,57 @@ function renderGroup(group, groupTabs, data) {
   el.className = "group";
   el.classList.toggle("selected", group.id === selectedGroupId);
   el.style.borderTopColor = group.color; // Firefox color names are not always valid CSS colors; refine later
+
+  // Active group: a thicker colored bar at the top. Drag it left or right to reorder groups.
+  if (group.id === selectedGroupId) {
+    const bar = document.createElement("div");
+    bar.className = "group-handle";
+    bar.draggable = true;
+    bar.title = "Drag to reorder groups";
+    bar.style.background = CSS_COLORS[group.color] || "#999";
+
+    bar.addEventListener("dragstart", (event) => {
+      event.stopPropagation();
+      draggedPanelGroup = {
+        id: group.id,
+        title: group.title,
+        color: group.color,
+        tabIds: groupTabs.map(t => t.id),
+        start: Math.min(...groupTabs.map(t => t.index)),
+        count: groupTabs.length,
+      };
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", String(group.id)); // Firefox needs data to start a drag
+      el.classList.add("dragging");
+    });
+    bar.addEventListener("dragend", () => {
+      draggedPanelGroup = null;
+      clearDropMarkers();
+      el.classList.remove("dragging");
+    });
+    el.appendChild(bar);
+  }
+
+  // Other groups accept a dropped group, before or after them
+  el.addEventListener("dragover", (event) => {
+    if (!draggedPanelGroup || draggedPanelGroup.id === group.id) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    clearDropMarkers();
+    el.classList.add(isLeftHalf(el, event) ? "drop-before" : "drop-after");
+  });
+  el.addEventListener("dragleave", () => {
+    el.classList.remove("drop-before", "drop-after");
+  });
+  el.addEventListener("drop", async (event) => {
+    event.preventDefault();
+    if (!draggedPanelGroup || draggedPanelGroup.id === group.id) return;
+    const before = isLeftHalf(el, event);
+    const dragged = draggedPanelGroup;
+    draggedPanelGroup = null;
+    await moveGroupBeside(dragged, groupTabs, before);
+    refresh();
+  });
 
   // Clicking anywhere on the group makes it the active one (ignore clicks on controls)
   el.addEventListener("click", (event) => {
@@ -242,14 +299,8 @@ function renderGroup(group, groupTabs, data) {
     });
 
     tabMenuWrap.append(tabMenuButton, tabMenu);
-    // Double-click a tab row of the active group to switch to that tab
-    if (group.id === selectedGroupId) {
-      li.addEventListener("dblclick", (event) => {
-        if (event.target.closest("button")) return;
-        event.preventDefault(); // no text selection from the double-click
-        goToTab(tab);
-      });
-    }
+    // A single click on the tab's title switches to that tab
+    name.addEventListener("click", () => goToTab(tab));
 
     // Drag a tab row to reorder tabs inside the group
     li.draggable = true;
@@ -421,6 +472,32 @@ async function addNewTabToGroup(group, text) {
   }
 }
 
+// Moves a whole group before or after another group (the target's tabs), keeping its order.
+// Same index arithmetic as dropping a group block in the strip.
+async function moveGroupBeside(dragged, targetTabs, before) {
+  if (targetTabs.length === 0) return;
+  const targetFirst = Math.min(...targetTabs.map(t => t.index));
+  const targetLast = Math.max(...targetTabs.map(t => t.index));
+  const draggedIsLeft = dragged.start < targetFirst;
+
+  let newStart;
+  if (before) {
+    newStart = draggedIsLeft ? targetFirst - dragged.count : targetFirst;
+  } else {
+    newStart = draggedIsLeft ? targetLast - dragged.count + 1 : targetLast + 1;
+  }
+  if (newStart === dragged.start) return;
+
+  await moveTabBlock(dragged.tabIds, dragged.start, newStart);
+  const newGroupId = await restoreGroupMembership(dragged.id, dragged.tabIds, {
+    title: dragged.title,
+    color: dragged.color,
+  });
+  if (newGroupId !== dragged.id && selectedGroupId === dragged.id) {
+    selectedGroupId = newGroupId;
+  }
+}
+
 // Right-click menu for a group block in the strip
 function showGroupMenu(x, y, item) {
   closeGroupMenu();
@@ -534,6 +611,33 @@ const stripEl = document.getElementById("strip");
 stripEl.addEventListener("dragstart", () => sendToEmbedder({ type: "mtg-drag", on: true }));
 stripEl.addEventListener("dragend", () => sendToEmbedder({ type: "mtg-drag", on: false }));
 
+// Title label shown while the pointer is over a tab in the strip
+const stripTip = document.createElement("div");
+stripTip.id = "strip-tip";
+document.body.appendChild(stripTip);
+
+function showStripTip(miniTab) {
+  const box = miniTab.getBoundingClientRect();
+  const half = 130; // half the label's maximum width, keeps it inside the viewport
+  stripTip.textContent = miniTab.dataset.title || "";
+  stripTip.style.left = `${Math.min(Math.max(box.left + box.width / 2, half), window.innerWidth - half)}px`;
+  // In the strip frame the label goes at its top; on the manager page it goes above the tab
+  stripTip.style.top = MODE === "strip" ? "4px" : `${box.top - 26}px`;
+  stripTip.style.display = "block";
+}
+
+function hideStripTip() {
+  stripTip.style.display = "none";
+}
+
+stripEl.addEventListener("mouseover", (event) => {
+  const miniTab = event.target.closest(".mini-tab");
+  if (miniTab) showStripTip(miniTab);
+  else hideStripTip();
+});
+stripEl.addEventListener("mouseleave", hideStripTip);
+stripEl.addEventListener("scroll", hideStripTip);
+
 // Mouse wheel scrolls the strip sideways (it is a horizontal row)
 document.getElementById("strip").addEventListener("wheel", (event) => {
   const strip = event.currentTarget;
@@ -547,6 +651,26 @@ document.querySelectorAll("#selection-bar button[data-action]").forEach((button)
   button.addEventListener("click", () => openSelectionDialog(button.dataset.action));
 });
 
+// Scrolls the strip so the browser's active tab is at its horizontal center
+function centerActiveTab() {
+  const active = lastData?.tabs.find(t => t.active);
+  if (!active) return;
+  const miniTab = document.querySelector(`#strip [data-tab-id="${active.id}"]`);
+  if (!miniTab) return;
+
+  const strip = document.getElementById("strip");
+  const box = miniTab.getBoundingClientRect();
+  const row = strip.getBoundingClientRect();
+  strip.scrollLeft += (box.left + box.width / 2) - (row.left + strip.clientWidth / 2);
+}
+document.getElementById("center-active").addEventListener("click", centerActiveTab);
+
+// Filter: shows only tabs (and groups with such tabs) whose title or URL contains the text
+document.getElementById("strip-filter").addEventListener("input", (event) => {
+  stripFilter = event.target.value.trim().toLowerCase();
+  if (lastData) renderStrip(lastData);
+});
+
 // "<" scrolls the strip to its first tab, ">" to its last tab
 document.getElementById("strip-first").addEventListener("click", () => {
   document.getElementById("strip").scrollLeft = 0;
@@ -556,10 +680,43 @@ document.getElementById("strip-last").addEventListener("click", () => {
   strip.scrollLeft = strip.scrollWidth;
 });
 
+// Rebuilding the strip replaces its elements. If that happens between a mouse press and
+// release, the click is lost. So the strip is rebuilt only when its content changes.
+let lastStripKey = null;
+
+function tabMatchesFilter(tab) {
+  if (!stripFilter) return true;
+  return `${tab.title || ""} ${tab.url || ""}`.toLowerCase().includes(stripFilter);
+}
+
+// With a filter, a group keeps only its matching tabs for display (visibleTabs).
+// Moves still use all of the group's tabs (tabs), and indices are the real window ones.
+function applyStripFilter(item) {
+  if (item.kind === "tab") return tabMatchesFilter(item.tab) ? item : null;
+  const visibleTabs = item.tabs.filter(tabMatchesFilter);
+  return visibleTabs.length > 0 ? { ...item, visibleTabs } : null;
+}
+
+function stripItemKey(item) {
+  if (item.kind === "tab") {
+    const t = item.tab;
+    return ["t", t.id, t.index, t.title, t.favIconUrl, t.url];
+  }
+  return ["g", item.group.id, item.group.title, item.group.color, item.first, item.last,
+    (item.visibleTabs ?? item.tabs).map(t => [t.id, t.title, t.favIconUrl])];
+}
+
 function renderStrip(data) {
+  const items = buildWindowItems(data.tabs, data.groups)
+    .map(applyStripFilter)
+    .filter(Boolean);
+  const key = JSON.stringify([stripActiveGroupId, stripFilter, items.map(stripItemKey)]);
+  if (key === lastStripKey && !scrollStripToActive) return;
+  lastStripKey = key;
+
   const strip = document.getElementById("strip");
   strip.textContent = "";
-  for (const item of buildWindowItems(data.tabs, data.groups)) {
+  for (const item of items) {
     strip.appendChild(item.kind === "tab" ? renderMiniTab(item) : renderMiniGroup(item));
   }
 
@@ -610,7 +767,8 @@ function sendToEmbedder(message) {
 function createMiniTab(tab) {
   const el = document.createElement("div");
   el.className = "mini-tab";
-  el.title = tab.title || tab.url;
+  el.dataset.title = tab.title || tab.url; // shown by the strip's title label, not a native tooltip
+  el.dataset.tabId = String(tab.id);       // used by "center the active tab"
 
   if (tab.favIconUrl) {
     const icon = document.createElement("img");
@@ -637,7 +795,7 @@ function renderMiniGroup(item) {
 
   const tabsRow = document.createElement("div");
   tabsRow.className = "mini-group-tabs";
-  for (const tab of item.tabs) {
+  for (const tab of item.visibleTabs ?? item.tabs) {
     const mini = createMiniTab(tab);
     // Double-click a tab inside the block goes to that tab, not to the group's first tab
     mini.addEventListener("dblclick", (event) => {
@@ -760,6 +918,11 @@ document.addEventListener("click", closeAllMenus);
 // Dialogs (overlay + dialog box) ------------------------------------------
 
 function closeDialogs() {
+  document.body.classList.remove("picker-open");
+  if (panelActions) {
+    panelActions.style.opacity = "";
+    panelActions.style.pointerEvents = "";
+  }
   document.getElementById("tab-picker")?.remove();
   document.getElementById("rename-dialog")?.remove();
   document.getElementById("selection-dialog")?.remove();
@@ -833,6 +996,12 @@ async function openTabPicker(group) {
     .filter(t => t.groupId === TAB_GROUP_ID_NONE && t.url !== managerUrl);
 
   const overlay = createOverlay("tab-picker");
+  document.body.classList.add("picker-open"); // greys out the group's "..." and "×" meanwhile
+  if (panelActions) {
+    // Inline as well as by class: the panel's "..." and "×" element is stable across refreshes
+    panelActions.style.opacity = "0.35";
+    panelActions.style.pointerEvents = "none";
+  }
 
   const dialog = document.createElement("div");
   dialog.className = "dialog";
@@ -875,7 +1044,7 @@ async function openTabPicker(group) {
       addButton.textContent = "+";
       addButton.title = "Move this tab to the group";
       addButton.addEventListener("click", async () => {
-        await api.tabs.group({ tabIds: [tab.id], groupId: group.id });
+        await addTabsToGroupEnd([tab.id], group); // the tab goes to the end of the group
         closeDialogs();
         refresh();
       });
@@ -1235,6 +1404,58 @@ function postPanelBounds() {
   });
 }
 
+// Builds the "..." and "×" group in the panel
+function buildPanelActions() {
+  const actions = document.createElement("div");
+  actions.className = "panel-actions";
+
+  const more = document.createElement("div");
+  more.className = "panel-more";
+
+  const moreButton = document.createElement("button");
+  moreButton.type = "button";
+  moreButton.className = "panel-more-button";
+  moreButton.textContent = "...";
+  moreButton.title = "More actions";
+
+  const menu = document.createElement("div");
+  menu.className = "menu";
+  menu.hidden = true;
+  menu.addEventListener("click", (event) => event.stopPropagation());
+
+  const ungroupItem = document.createElement("button");
+  ungroupItem.type = "button";
+  ungroupItem.textContent = "Ungroup tabs";
+  ungroupItem.addEventListener("click", async () => {
+    closeAllMenus();
+    await ungroupSelectedGroup();
+  });
+  menu.appendChild(ungroupItem);
+
+  moreButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const wasHidden = menu.hidden;
+    closeAllMenus();
+    menu.hidden = !wasHidden;
+  });
+
+  more.append(moreButton, menu);
+  actions.append(more, closeButton);
+  return actions;
+}
+
+// Ungroups every tab of the active group. The group disappears; the next group is selected.
+async function ungroupSelectedGroup() {
+  const tabIds = (lastData?.tabs || [])
+    .filter(t => t.groupId === selectedGroupId)
+    .map(t => t.id);
+  if (tabIds.length > 0) {
+    await api.tabs.ungroup(tabIds);
+  }
+  selectedGroupId = null;
+  refresh();
+}
+
 // Panel mode: minimize button and selection requests from the embedding page
 if (MODE === "panel") {
   window.addEventListener("message", (event) => {
@@ -1245,7 +1466,8 @@ if (MODE === "panel") {
     }
   });
 
-  document.getElementById("minimize").addEventListener("click", () => {
+  // closeButton is moved into panelActions, so it is not found by id any more
+  closeButton.addEventListener("click", () => {
     sendToEmbedder({ type: "mtg-close" });
   });
 

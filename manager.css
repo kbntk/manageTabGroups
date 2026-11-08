@@ -92,6 +92,7 @@ h1 { margin: 0 0 8px; font-size: 20px; font-weight: normal; }
 }
 
 .group li span.title {
+  cursor: pointer;
   flex: 1 1 auto; /* title takes the free space, so the "..." button sits at the right edge */
   min-width: 0;   /* let long titles shrink and ellipsize */
   overflow: hidden;
@@ -113,8 +114,8 @@ button.round {
 /* Group "+" button: twice the default size of .round (28px) */
 button.round.add {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: 20px; /* kept away from the group's right edge */
+  bottom: 16px;
   width: 56px;
   height: 56px;
   font-size: 32px;
@@ -212,12 +213,22 @@ select.color { font-size: 12px; }
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 6px 0;
+  padding: 6px 12px 6px 0; /* room on the right so the "+" is clear of the edge and the scrollbar */
   font-size: 14px;
   border-bottom: 1px solid #eee;
 }
 
 .picker-list li.empty { color: #666; border-bottom: none; }
+
+/* The row's "+" keeps its round shape when the title is long */
+.picker-list li button.round {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  padding: 0;
+  line-height: 1;
+}
 
 .group li[draggable="true"] { cursor: grab; }
 
@@ -229,6 +240,23 @@ select.color { font-size: 12px; }
 .group li.drop-before { box-shadow: inset 0 2px 0 #111; }
 
 .group li.drop-after { box-shadow: inset 0 -2px 0 #111; }
+
+/* Colored bar of the active group: a wider handle for reordering groups */
+.group-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 14px;
+  border-radius: 11px 11px 0 0;
+  cursor: grab;
+}
+
+.group.dragging { opacity: 0.5; }
+
+.group.drop-before { box-shadow: -6px 0 0 #111; }
+
+.group.drop-after { box-shadow: 6px 0 0 #111; }
 
 /* Bottom strip: all tabs of the window in order, miniaturized */
 body[data-mode="page"] { padding-bottom: 96px; }
@@ -250,12 +278,34 @@ body[data-mode="panel"] header {
 body[data-mode="panel"] header h1 { margin: 0; }
 
 .minimize { display: none; }
-body[data-mode="panel"] .minimize {
-  display: block;
+/* "..." and "×" at the top right of the active group window */
+body[data-mode="panel"] .panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   position: absolute;     /* relative to the active group window (position: relative) */
   top: -14px;
   right: -10px;
   z-index: 1100;          /* above the header, which spans the full width */
+}
+body[data-mode="panel"] > .panel-actions {  /* no group: top right of the panel */
+  position: fixed;
+  top: 4px;
+  right: 4px;
+}
+body[data-mode="panel"] .panel-more { position: relative; }
+
+/* While "Add tabs to ..." is open, the group's "..." and "×" are greyed out */
+body.picker-open .panel-actions,
+body.picker-open .group h2 .menu-button {
+  opacity: 0.35;
+  pointer-events: none;
+}
+/* The panel's "..." and "×" sit above the dimmed overlay, so they are lowered under it too */
+body.picker-open .panel-actions { z-index: 5; }
+body[data-mode="panel"] .panel-more-button,
+body[data-mode="panel"] .minimize {
+  display: block;
   width: 28px;
   height: 28px;
   padding: 0;
@@ -307,6 +357,24 @@ body[data-mode="strip"].compact #strip .mini-group { padding: 2px; border-width:
 .strip-nav:last-child { border-right: 0; border-left: 1px solid #ccc; }
 
 .strip-nav:hover { background: #eee; }
+
+/* Title label for the tab under the pointer in the strip */
+#strip-tip {
+  display: none;
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 2000;
+  max-width: 260px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #111;
+  color: #fff;
+  font: 12px system-ui, sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
 
 /* Right-click menu for a group block in the strip */
 .context-menu {
@@ -364,6 +432,52 @@ body[data-mode="strip"] #selection-bar { display: none; }
 
 .dialog-row { display: flex; align-items: center; gap: 8px; }
 .dialog-row select { padding: 4px; font-size: 14px; }
+
+/* "Center the active tab": a circle with a dot, at the top center of the strip */
+/* Center button and filter sit together at the top center of the strip */
+#strip-tools {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.center-button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #333;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.center-button span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #111;
+}
+
+.center-button:hover { background: #eee; }
+
+/* Filter next to the "center" button: shows tabs whose title or URL contains the text */
+#strip-filter {
+  width: 160px;
+  height: 22px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 1px solid #333;
+  border-radius: 11px;
+  font: 12px system-ui, sans-serif;
+}
 
 /* Every item, single tab or group, has the full strip height */
 #strip {
@@ -424,12 +538,23 @@ body[data-mode="strip"] #selection-bar { display: none; }
 #strip .drop-after { box-shadow: inset -3px 0 0 #111; }
 
 .picker-list li span.title {
+  flex: 1 1 auto;
+  min-width: 0; /* lets a long title shrink and ellipsize, so the row's "+" is not pushed out and clipped */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .dialog-close { align-self: flex-end; padding: 4px 12px; cursor: pointer; }
+
+/* Rounded corners throughout: dialogs, menus, fields and buttons.
+   Round buttons (button.round, the "×", "..." and center button) keep their circles. */
+.dialog { border-radius: 12px; }
+.menu, .context-menu { border-radius: 8px; overflow: hidden; }
+button { border-radius: 6px; }
+input[type="text"], input[type="search"], select { border-radius: 6px; }
+#selection-bar { border-radius: 8px; }
+.swatch { border-radius: 3px; }
 
 .dialog-form { display: flex; flex-direction: column; gap: 12px; }
 

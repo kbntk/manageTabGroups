@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="manager.css">
 </head>
 <body>
-  <button id="minimize" class="minimize" type="button" title="Close">×</button>
+  <button id="minimize" class="minimize" type="button" title="Close view" aria-label="Close view">×</button>
   <header>
     <h1>Tab groups</h1>
     <nav id="group-nav"></nav>
@@ -21,6 +21,10 @@
   </div>
   <main id="groups"></main>
   <div id="strip-bar">
+    <div id="strip-tools">
+      <button id="center-active" class="center-button" type="button" title="Center the active tab"><span></span></button>
+      <input id="strip-filter" type="search" placeholder="Filter tabs..." aria-label="Filter tabs">
+    </div>
     <button id="strip-first" class="strip-nav" type="button" title="First tab">&lt;</button>
     <section id="strip" aria-label="All tabs in window order"></section>
     <button id="strip-last" class="strip-nav" type="button" title="Last tab">&gt;</button>

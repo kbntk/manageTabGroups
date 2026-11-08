@@ -25,6 +25,10 @@
   let panelReady = false;
   let pendingSelect = null; // group to select once the panel has loaded
   let minimizedGroupId = null;
+  // A frame's window is about:blank (page origin) until its document loads, so messages
+  // with the extension origin as target must wait for the load event.
+  let stripLoaded = false;
+  let panelLoaded = false;
   let dragging = false;        // a tab or group is being dragged in the strip
   let ignoreClicksUntil = 0;   // a click right after a drag is not a click outside
 
@@ -54,11 +58,16 @@
     state.hoverStrip = false;
     layout();
   });
-  strip.addEventListener("load", () => { postCompact(); postActive(); });
+  strip.addEventListener("load", () => {
+    stripLoaded = true;
+    postCompact();
+    postActive();
+  });
 
   // Group that is active in the open panel; the strip highlights it
   let activeGroupId = null;
   function postActive() {
+    if (!stripLoaded) return;
     strip.contentWindow?.postMessage(
       { type: "mtg-active", groupId: state.open ? activeGroupId : null },
       EXT_ORIGIN
@@ -72,6 +81,7 @@
 
   // Tell the strip whether to show icons only
   function postCompact() {
+    if (!stripLoaded) return;
     strip.contentWindow?.postMessage({ type: "mtg-compact", on: isCompact() }, EXT_ORIGIN);
   }
 
@@ -112,6 +122,7 @@
       display: "none",
     });
     frame.src = browser.runtime.getURL("manager.html?mode=panel");
+    frame.addEventListener("load", () => { panelLoaded = true; });
     document.documentElement.appendChild(frame);
     return frame;
   }
@@ -131,7 +142,7 @@
     if (!panel) panel = createPanel();
     panel.style.display = "block";
     // The panel was hidden while it rendered, so ask it to measure itself now
-    panel.contentWindow?.postMessage({ type: "mtg-measure" }, EXT_ORIGIN);
+    if (panelLoaded) panel.contentWindow.postMessage({ type: "mtg-measure" }, EXT_ORIGIN);
     if (groupId != null) selectInPanel(groupId);
     postCompact();
     layout();
@@ -223,9 +234,8 @@
   // Change notifications from the background script, forwarded to the strip and panel
   browser.runtime.onMessage.addListener((message) => {
     if (message?.type !== "mtg-event") return;
-    for (const frame of [strip, panel]) {
-      frame?.contentWindow?.postMessage({ type: "mtg-event", names: message.names }, EXT_ORIGIN);
-    }
+    if (stripLoaded) strip.contentWindow.postMessage({ type: "mtg-event", names: message.names }, EXT_ORIGIN);
+    if (panelLoaded) panel.contentWindow.postMessage({ type: "mtg-event", names: message.names }, EXT_ORIGIN);
   });
 
   document.documentElement.append(strip, bar);
