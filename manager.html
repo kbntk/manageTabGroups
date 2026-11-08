@@ -20,11 +20,11 @@
     <button type="button" data-action="move-to-new">Move to a new group</button>
   </div>
   <main id="groups"></main>
+  <div id="strip-tools">
+    <button id="center-active" class="center-button" type="button" title="Center the active tab"><span></span></button>
+    <input id="strip-filter" type="search" placeholder="Filter tabs..." aria-label="Filter tabs">
+  </div>
   <div id="strip-bar">
-    <div id="strip-tools">
-      <button id="center-active" class="center-button" type="button" title="Center the active tab"><span></span></button>
-      <input id="strip-filter" type="search" placeholder="Filter tabs..." aria-label="Filter tabs">
-    </div>
     <button id="strip-first" class="strip-nav" type="button" title="First tab">&lt;</button>
     <section id="strip" aria-label="All tabs in window order"></section>
     <button id="strip-last" class="strip-nav" type="button" title="Last tab">&gt;</button>

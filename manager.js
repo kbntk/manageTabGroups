@@ -671,13 +671,15 @@ document.getElementById("strip-filter").addEventListener("input", (event) => {
   if (lastData) renderStrip(lastData);
 });
 
-// "<" scrolls the strip to its first tab, ">" to its last tab
-document.getElementById("strip-first").addEventListener("click", () => {
-  document.getElementById("strip").scrollLeft = 0;
-});
-document.getElementById("strip-last").addEventListener("click", () => {
+// "<" / ">" scroll the strip by one visible page of tabs.
+// With Shift held they go to the first / last tab instead.
+document.getElementById("strip-first").addEventListener("click", (event) => {
   const strip = document.getElementById("strip");
-  strip.scrollLeft = strip.scrollWidth;
+  strip.scrollLeft = event.shiftKey ? 0 : strip.scrollLeft - strip.clientWidth;
+});
+document.getElementById("strip-last").addEventListener("click", (event) => {
+  const strip = document.getElementById("strip");
+  strip.scrollLeft = event.shiftKey ? strip.scrollWidth : strip.scrollLeft + strip.clientWidth;
 });
 
 // Rebuilding the strip replaces its elements. If that happens between a mouse press and

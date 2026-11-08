@@ -5,6 +5,7 @@
 (() => {
   const EXT_ORIGIN = new URL(browser.runtime.getURL("")).origin;
   const STRIP_HEIGHT = 80;   // px, expanded strip
+  const TOOLS_HEIGHT = 30;   // px, the "center" button and filter row above the strip
   // Highest z-index a page can use. Sites such as bbc.com have sticky menus with z-index
   // above 1000, which covered the panel's title; the panel must stay on top of them.
   const TOP_Z_INDEX = "2147483647";
@@ -80,9 +81,14 @@
   }
 
   // Tell the strip whether to show icons only
+  // The tools row and the labels are hidden while the strip is compact or collapsed
+  function hidesTools() {
+    return isCompact() || (state.minimized && !state.hoverStrip);
+  }
+
   function postCompact() {
     if (!stripLoaded) return;
-    strip.contentWindow?.postMessage({ type: "mtg-compact", on: isCompact() }, EXT_ORIGIN);
+    strip.contentWindow?.postMessage({ type: "mtg-compact", on: hidesTools() }, EXT_ORIGIN);
   }
 
   // Minimized bar with the group name, top right
@@ -177,7 +183,9 @@
     let stripHeight = STRIP_HEIGHT;
     if (isCompact()) stripHeight = STRIP_COMPACT;
     else if (stripCollapsed) stripHeight = STRIP_COLLAPSED;
-    strip.style.height = `${stripHeight}px`;
+    // The tools row is shown only when the strip is expanded (not compact, not collapsed)
+    const toolsHeight = hidesTools() ? 0 : TOOLS_HEIGHT;
+    strip.style.height = `${stripHeight + toolsHeight}px`;
     postCompact();
     postActive();
 

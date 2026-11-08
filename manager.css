@@ -259,11 +259,12 @@ select.color { font-size: 12px; }
 .group.drop-after { box-shadow: 6px 0 0 #111; }
 
 /* Bottom strip: all tabs of the window in order, miniaturized */
-body[data-mode="page"] { padding-bottom: 96px; }
+body[data-mode="page"] { padding-bottom: 116px; }
 
 /* Panel mode: the overlay on a web page. Transparent except for the group windows and
    the "<" / ">" buttons. No header and no strip (the strip is shown separately). */
 body[data-mode="panel"] { padding-bottom: 0; background: transparent; }
+body[data-mode="panel"] #strip-tools,
 body[data-mode="panel"] #strip-bar,
 body[data-mode="panel"] #group-nav { display: none; }
 
@@ -321,7 +322,12 @@ body[data-mode="panel"] .minimize {
 body[data-mode="strip"] { margin: 0; padding: 0; }
 body[data-mode="strip"] header,
 body[data-mode="strip"] #groups { display: none; }
-body[data-mode="strip"] #strip-bar { top: 0; bottom: 0; height: auto; border-top: 0; }
+/* Strip frame: the tools row on top, the strip bar below it, filling the frame */
+body[data-mode="strip"] { display: flex; flex-direction: column; height: 100vh; }
+body[data-mode="strip"] #strip-tools { position: static; flex: 0 0 30px; bottom: auto; }
+/* Compact or collapsed strip: no tools row, so the miniatures keep their small size */
+body[data-mode="strip"].compact #strip-tools { display: none; }
+body[data-mode="strip"] #strip-bar { position: static; flex: 1 1 auto; height: auto; border-top: 0; min-height: 0; }
 
 /* Strip in icons-only mode (set by content.js): no group titles, thin strip */
 body[data-mode="strip"].compact #strip { padding: 4px 8px; gap: 6px; }
@@ -434,16 +440,20 @@ body[data-mode="strip"] #selection-bar { display: none; }
 .dialog-row select { padding: 4px; font-size: 14px; }
 
 /* "Center the active tab": a circle with a dot, at the top center of the strip */
-/* Center button and filter sit together at the top center of the strip */
+/* Center button and filter: a row just above the bottom strip (page mode) */
 #strip-tools {
-  position: absolute;
-  top: 2px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 80px;
+  height: 30px;
   z-index: 10;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  background: #fafafa;
+  box-sizing: border-box;
 }
 
 .center-button {
