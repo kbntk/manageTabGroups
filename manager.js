@@ -796,6 +796,22 @@ function postStripTitles() {
   sendToEmbedder({ type: "mtg-titles", items });
 }
 
+// The "×" button on a tab or group in the strip. Its clicks do not reach the tab or group under it.
+function makeCloseButton(title, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "mini-close";
+  button.textContent = "×";
+  button.title = title;
+  button.setAttribute("aria-label", title);
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    onClick();
+  });
+  button.addEventListener("dblclick", (event) => event.stopPropagation());
+  return button;
+}
+
 // A miniature tab showing the page icon (falls back to a plain box if none)
 function createMiniTab(tab) {
   const el = document.createElement("div");
@@ -811,6 +827,9 @@ function createMiniTab(tab) {
     icon.addEventListener("error", () => icon.remove()); // broken icon: keep the plain box
     el.appendChild(icon);
   }
+  el.appendChild(makeCloseButton("Close tab", async () => {
+    await api.tabs.remove(tab.id);
+  }));
   return el;
 }
 
@@ -838,7 +857,12 @@ function renderMiniGroup(item) {
     tabsRow.appendChild(mini);
   }
 
-  el.append(label, tabsRow);
+  // Closing a group ungroups its tabs: they stay open as individual tabs
+  const close = makeCloseButton("Close group (its tabs stay open, ungrouped)", async () => {
+    await api.tabs.ungroup(item.tabs.map(t => t.id));
+    refresh();
+  });
+  el.append(label, tabsRow, close);
 
   el.addEventListener("dblclick", () => goToGroup(item.tabs));
   el.addEventListener("contextmenu", (event) => {
@@ -1339,7 +1363,7 @@ async function refresh() {
 // so they go through content.js and the background script (see createRemoteApi).
 // Declared after the remote tables below, which createRemoteApi reads.
 const REMOTE_CALLS = {
-  tabs: ["query", "get", "move", "group", "ungroup", "update", "create", "duplicate"],
+  tabs: ["query", "get", "move", "group", "ungroup", "update", "create", "duplicate", "remove"],
   tabGroups: ["query", "get", "update"],
   windows: ["getCurrent", "update"],
   search: ["search"],

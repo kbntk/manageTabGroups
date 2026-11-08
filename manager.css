@@ -509,9 +509,27 @@ body[data-mode="strip"] #selection-bar { display: none; }
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative; /* anchors the "×" button */
   background: #bbb;
   border-radius: 2px;
 }
+
+/* "×" above the icon of a tab, top-right corner of a group; hidden while the strip is compact */
+#strip .mini-close {
+  display: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+  font: 11px/12px system-ui, sans-serif;
+  color: #111;
+  cursor: pointer;
+}
+#strip .mini-tab .mini-close { left: 50%; right: auto; transform: translateX(-50%); }
+body:not(.compact) #strip .mini-close { display: block; }
+#strip .mini-close:hover { color: #c00; }
 
 #strip .mini-favicon {
   width: 16px;
@@ -521,6 +539,7 @@ body[data-mode="strip"] #selection-bar { display: none; }
 
 #strip .mini-group {
   flex-shrink: 0;
+  position: relative; /* anchors the group's "×" button */
   display: flex;
   flex-direction: column;
   gap: 2px;
