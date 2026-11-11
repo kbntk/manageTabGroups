@@ -612,31 +612,7 @@ stripEl.addEventListener("dragstart", () => sendToEmbedder({ type: "mtg-drag", o
 stripEl.addEventListener("dragend", () => sendToEmbedder({ type: "mtg-drag", on: false }));
 
 // Title label shown while the pointer is over a tab in the strip
-const stripTip = document.createElement("div");
-stripTip.id = "strip-tip";
-document.body.appendChild(stripTip);
-
-function showStripTip(miniTab) {
-  const box = miniTab.getBoundingClientRect();
-  const half = 130; // half the label's maximum width, keeps it inside the viewport
-  stripTip.textContent = miniTab.dataset.title || "";
-  stripTip.style.left = `${Math.min(Math.max(box.left + box.width / 2, half), window.innerWidth - half)}px`;
-  // In the strip frame the label goes at its top; on the manager page it goes above the tab
-  stripTip.style.top = MODE === "strip" ? "4px" : `${box.top - 26}px`;
-  stripTip.style.display = "block";
-}
-
-function hideStripTip() {
-  stripTip.style.display = "none";
-}
-
-stripEl.addEventListener("mouseover", (event) => {
-  const miniTab = event.target.closest(".mini-tab");
-  if (miniTab) showStripTip(miniTab);
-  else hideStripTip();
-});
-stripEl.addEventListener("mouseleave", hideStripTip);
-stripEl.addEventListener("scroll", () => { hideStripTip(); postStripTitles(); });
+stripEl.addEventListener("scroll", postStripTitles);
 
 // The tab under the pointer: its title on the web page gets a yellow background
 let lastTitleHoverId = null;

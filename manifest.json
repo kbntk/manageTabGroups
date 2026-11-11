@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Manage Tab Groups",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "View and manage tab groups: add/remove tabs, change group color.",
   "permissions": ["tabs", "tabGroups", "search", "storage"],
   "action": {

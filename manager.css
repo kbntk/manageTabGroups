@@ -367,24 +367,6 @@ body[data-mode="strip"].compact #strip .mini-group { padding: 2px; border-width:
 
 .strip-nav:hover { background: #eee; }
 
-/* Title label for the tab under the pointer in the strip */
-#strip-tip {
-  display: none;
-  position: fixed;
-  transform: translateX(-50%);
-  z-index: 2000;
-  max-width: 260px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: #111;
-  color: #fff;
-  font: 12px system-ui, sans-serif;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-}
-
 /* Right-click menu for a group block in the strip */
 .context-menu {
   position: fixed;
