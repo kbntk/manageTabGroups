@@ -443,6 +443,24 @@ body[data-mode="strip"] #selection-bar { display: none; }
 .dialog-row select { padding: 4px; font-size: 14px; }
 
 /* "Center the active tab": a circle with a dot, at the top center of the strip */
+/* "<" and ">" beside the center button and the filter, same action as the bar's end buttons */
+.tools-nav {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #333;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #111;
+}
+.tools-nav:hover { background: #eee; }
+.tools-nav svg { display: block; }
+
 /* Center button and filter: a row just above the bottom strip (page mode) */
 #strip-tools {
   position: fixed;
@@ -513,6 +531,10 @@ body[data-mode="strip"] #selection-bar { display: none; }
   background: #bbb;
   border-radius: 2px;
 }
+
+/* Room above the icons and group labels for the "×" (not in compact mode, where there is no room) */
+body:not(.compact) #strip .mini-tab { padding-top: 12px; }
+body:not(.compact) #strip .mini-group { padding-top: 14px; }
 
 /* "×" above the icon of a tab, top-right corner of a group; hidden while the strip is compact */
 #strip .mini-close {

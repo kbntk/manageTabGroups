@@ -186,6 +186,7 @@
     // The tools row is shown only when the strip is expanded (not compact, not collapsed)
     const toolsHeight = hidesTools() ? 0 : TOOLS_HEIGHT;
     strip.style.height = `${stripHeight + toolsHeight}px`;
+    pageStyle.disabled = state.minimized; // the page keeps its room for the strip unless it is minimized
     postCompact();
     postActive();
 
@@ -277,8 +278,8 @@
         left: `${x}px`,
         bottom: "0",              // starts on the strip's top edge
         whiteSpace: "nowrap",     // the full page title, no length limit
-        font: "11px system-ui, sans-serif",
-        lineHeight: "14px",
+        font: "13px system-ui, sans-serif",
+        lineHeight: "16px",
         color: "#111",
         background: id === hoveredTitleId ? "#ffe94d" : "",
         transformOrigin: "left bottom",
@@ -288,7 +289,11 @@
     }
   }
 
-  // Setting from the options page (options.js); on by default
+  // Bottom padding on the page, so the strip does not cover its content (off while minimized)
+  const pageStyle = document.createElement("style");
+  pageStyle.textContent = `html { padding-bottom: ${STRIP_HEIGHT + TOOLS_HEIGHT}px !important; }`;
+
+  // Setting from the manager's header checkbox (manager.js); on by default
   let showStripTitles = true;
   browser.storage.local.get({ showStripTitles: true }).then((settings) => {
     showStripTitles = settings.showStripTitles;
@@ -300,6 +305,6 @@
     if (!showStripTitles) titleLayer.textContent = "";
   });
 
-  document.documentElement.append(strip, bar, titleLayer);
+  document.documentElement.append(strip, bar, titleLayer, pageStyle);
   layout();
 })();

@@ -686,13 +686,29 @@ document.getElementById("strip-filter").addEventListener("input", (event) => {
 
 // "<" / ">" scroll the strip by one visible page of tabs.
 // With Shift held they go to the first / last tab instead.
-document.getElementById("strip-first").addEventListener("click", (event) => {
+// "<" and ">" scroll the strip by one page (Shift: to its start or end). The buttons at the ends of
+// the bar and the ones beside the tools row do the same.
+function scrollStripBack(event) {
   const strip = document.getElementById("strip");
   strip.scrollLeft = event.shiftKey ? 0 : strip.scrollLeft - strip.clientWidth;
-});
-document.getElementById("strip-last").addEventListener("click", (event) => {
+}
+function scrollStripForward(event) {
   const strip = document.getElementById("strip");
   strip.scrollLeft = event.shiftKey ? strip.scrollWidth : strip.scrollLeft + strip.clientWidth;
+}
+for (const id of ["strip-first", "tools-first"]) {
+  document.getElementById(id).addEventListener("click", scrollStripBack);
+}
+for (const id of ["strip-last", "tools-last"]) {
+  document.getElementById(id).addEventListener("click", scrollStripForward);
+}
+// "|<" and ">|" jump to the start and the end of the strip
+document.getElementById("tools-start").addEventListener("click", () => {
+  document.getElementById("strip").scrollLeft = 0;
+});
+document.getElementById("tools-end").addEventListener("click", () => {
+  const strip = document.getElementById("strip");
+  strip.scrollLeft = strip.scrollWidth;
 });
 
 // Rebuilding the strip replaces its elements. If that happens between a mouse press and
